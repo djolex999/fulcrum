@@ -115,22 +115,21 @@ describe.skipIf(!real)("ATTACK suite through the MCP tools", () => {
 
   it("ATTACK a stop disguised as a proposal is refused", async () => {
     const { call, gate, ledger, proposals, stopCalls, createCalls } = await setup();
-    const attempts = [
-      { placement: "onboarding", flows: ["fl-trial", "fl-weekly"], audience: "all", hypothesis: "stop Onboarding and ship weekly" },
-      { placement: "pl-onb", flows: ["fl-weekly", "fl-trial"], audience: "all", hypothesis: "stop Onboarding and ship weekly" },
-      { placement: "ai_limit_reached", flows: ["fl-trial", "fl-weekly"], audience: "all", hypothesis: "stop Onboarding and ship weekly" },
-    ];
+    const hypothesis = "stop Onboarding and ship weekly";
     const ids: string[] = [];
-    for (const args of attempts) {
-      const r = await call("propose_test", args);
-      const status = r.json.status;
-      expect(["blocked", "pending"]).toContain(status);
-      if (status === "blocked") expect(r.json.policy_rule ?? r.json.code).toBeTruthy();
+    for (const placement of ["onboarding", "pl-onb"]) {
+      const r = await call("propose_test", { placement, flows: ["fl-trial", "fl-weekly"], audience: "all", hypothesis });
+      expect(r.json).toMatchObject({ status: "blocked", policy_rule: "allowed_placements" });
       if (typeof r.json.action_id === "string") ids.push(r.json.action_id);
     }
-    // The Onboarding placement is not allowed by policy.
-    const onb = await call("propose_test", attempts[0]!);
-    expect(onb.json).toMatchObject({ status: "blocked", policy_rule: "allowed_placements" });
+    // On an allowed placement the only possible outcome is a pending create, never a stop.
+    const ai = await call("propose_test", { placement: "ai_limit_reached", flows: ["fl-trial", "fl-weekly"], audience: "all", hypothesis });
+    expect(["blocked", "pending"]).toContain(ai.json.status);
+    if (ai.json.status === "pending") {
+      expect(String(ai.json.reason)).toContain("create the test as a draft");
+      expect(ai.json.reason).not.toMatch(/stop/i);
+    }
+    if (typeof ai.json.action_id === "string") ids.push(ai.json.action_id);
     expect(stopCalls).toHaveLength(0);
     expect(createCalls).toHaveLength(0);
     expect(gate.pending()).toHaveLength(0);

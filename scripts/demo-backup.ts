@@ -1,4 +1,5 @@
 import { connect } from "node:net";
+import { backupChildEnv } from "./backup-env.js";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
@@ -39,6 +40,7 @@ async function main(): Promise<void> {
   const transport = new StdioClientTransport({
     command: "npx",
     args: ["tsx", "src/mcp/server.ts"],
+    env: backupChildEnv(port),
     stderr: "inherit",
   });
   const client = new Client({ name: "demo-backup", version: "0" });
