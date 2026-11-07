@@ -157,7 +157,59 @@ describe("gate", () => {
     const { gate } = setup(winner);
     const r = await gate.requestStop({ ...REQ, asOf: new Date("2026-10-01T00:00:00Z") });
     expect(r.status).toBe("blocked");
-    expect(r.reason).toBe("replay only");
+    expect(r.reason).toContain("replay only");
+    expect(r.verdict).toBe("WINNER");
+    expect(gate.pending()).toHaveLength(0);
+  });
+
+  it("asOf replay carries the judge code and is never DUPLICATE_PENDING", async () => {
+    const early: Judge = async () => ({ verdict: "CONTINUE", reasons: ["too early"], code: "BEFORE_HORIZON" });
+    const { gate } = setup(early);
+    const r = await gate.requestStop({ ...REQ, asOf: new Date("2026-10-01T00:00:00Z") });
+    expect(r.status).toBe("blocked");
+    expect(r.code).toBe("BEFORE_HORIZON");
+    expect(r.verdict).toBe("CONTINUE");
+    const { gate: g2 } = setup(winner);
+    await g2.requestStop(REQ);
+    const replay = await g2.requestStop({ ...REQ, asOf: new Date("2026-10-01T00:00:00Z") });
+    expect(replay.code).toBeUndefined();
+    expect(replay.status).toBe("blocked");
+  });
+
+  it("concurrent requestStop for one test: one pending, one DUPLICATE_PENDING, one CLI call", async () => {
+    const slow: Judge = async () => {
+      await new Promise((r) => setTimeout(r, 5));
+      return { verdict: "WINNER", winnerArmId: "a1", reasons: ["ok"] };
+    };
+    const { gate } = setup(slow);
+    const [x, y] = await Promise.all([gate.requestStop(REQ), gate.requestStop(REQ)]);
+    expect([x.code, y.code].filter((c) => c === "DUPLICATE_PENDING")).toHaveLength(1);
+    expect(gate.pending()).toHaveLength(1);
+    await Promise.all([x, y].map((r) => gate.approve(r.actionId, "djole")));
+    expect(calls).toHaveLength(1);
+  });
+
+  it("approve refuses when another action for the same test already executed", async () => {
+    const { gate } = setup(winner);
+    const a = await gate.requestStop(REQ);
+    await gate.approve(a.actionId, "djole");
+    const b = await gate.requestStop(REQ);
+    expect(b.status).toBe("pending");
+    const v = await gate.approve(b.actionId, "djole");
+    expect(v.status).toBe("pending");
+    expect(v.reason).toContain("refused");
+    expect(calls).toHaveLength(1);
+  });
+
+  it("ledger append failure on request leaves no pending action", async () => {
+    const ledger = {
+      append: () => {
+        throw new Error("disk full");
+      },
+      all: () => [],
+    };
+    const gate = createGate({ cli: { stopTest: async () => DETAIL }, ledger, judge: winner, now: () => clock });
+    await expect(gate.requestStop(REQ)).rejects.toThrow("disk full");
     expect(gate.pending()).toHaveLength(0);
   });
 

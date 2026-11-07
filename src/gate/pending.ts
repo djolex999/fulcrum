@@ -40,7 +40,10 @@ export interface StopRequestResult {
   actionId: string;
   status: "blocked" | "pending";
   reason: string;
-  code?: "DUPLICATE_PENDING";
+  /** Judge verdict (or the existing action's verdict for a duplicate). */
+  verdict: string;
+  /** Judge code (e.g. BEFORE_HORIZON, METRIC_NOT_GOAL) or DUPLICATE_PENDING. */
+  code?: string;
 }
 
 interface Action extends ActionView {
@@ -61,6 +64,8 @@ export function createGate(deps: {
   const now = deps.now ?? (() => new Date());
   const ttlMs = deps.ttlMs ?? DEFAULT_TTL_MS;
   const actions = new Map<string, Action>();
+  // testId -> actionId, held synchronously while a request awaits the judge.
+  const reserved = new Map<string, string>();
 
   const view = (a: Action): ActionView => {
     const { rationale: _r, inFlight: _f, ...rest } = a;
@@ -121,6 +126,37 @@ export function createGate(deps: {
       inFlight: false,
     };
 
+    const optsBase = { metric: i.metric };
+
+    // Replay: always runs the judge, never pending, never a duplicate.
+    if (i.asOf) {
+      const result = await runJudge(i.testId, { ...optsBase, asOf: i.asOf });
+      base.verdict = result.verdict;
+      base.reason = redactSecrets([...result.reasons, "replay only"].join("; "));
+      record(base, "request_stop");
+      actions.set(id, base);
+      return {
+        actionId: id,
+        status: "blocked",
+        reason: base.reason,
+        verdict: result.verdict,
+        ...(result.code !== undefined ? { code: result.code } : {}),
+      };
+    }
+
+    const inProgress = reserved.get(i.testId);
+    if (inProgress !== undefined) {
+      base.reason = `DUPLICATE_PENDING: action ${inProgress} is already being requested for this test`;
+      base.verdict = "UNKNOWN";
+      record(base, "request_stop");
+      return {
+        actionId: inProgress,
+        status: "pending",
+        reason: base.reason,
+        verdict: base.verdict,
+        code: "DUPLICATE_PENDING",
+      };
+    }
     for (const existing of actions.values()) {
       if (existing.testId !== i.testId || existing.status !== "pending") continue;
       if (expireIfStale(existing)) continue;
@@ -131,30 +167,36 @@ export function createGate(deps: {
         actionId: existing.actionId,
         status: "pending",
         reason: base.reason,
+        verdict: existing.verdict,
         code: "DUPLICATE_PENDING",
       };
     }
 
-    const result = await runJudge(i.testId, {
-      metric: i.metric,
-      ...(i.asOf ? { asOf: i.asOf } : {}),
-    });
-    base.verdict = result.verdict;
-
-    if (i.asOf) {
-      base.reason = "replay only";
-    } else if (result.verdict !== "WINNER") {
-      base.reason = result.reasons.join("; ") || `judge verdict ${result.verdict}`;
-    } else if (result.winnerArmId !== i.winnerArmId) {
-      base.reason = `judge winner arm ${result.winnerArmId ?? "none"} does not match requested arm ${i.winnerArmId}`;
-    } else {
-      base.status = "pending";
-      base.reason = result.reasons.join("; ") || "awaiting human approval";
+    reserved.set(i.testId, id); // synchronous, before the first await
+    try {
+      const result = await runJudge(i.testId, optsBase);
+      base.verdict = result.verdict;
+      if (result.verdict !== "WINNER") {
+        base.reason = result.reasons.join("; ") || `judge verdict ${result.verdict}`;
+      } else if (result.winnerArmId !== i.winnerArmId) {
+        base.reason = `judge winner arm ${result.winnerArmId ?? "none"} does not match requested arm ${i.winnerArmId}`;
+      } else {
+        base.status = "pending";
+        base.reason = result.reasons.join("; ") || "awaiting human approval";
+      }
+      base.reason = redactSecrets(base.reason);
+      record(base, "request_stop"); // ledger first: if this throws, no action exists
+      actions.set(id, base);
+      return {
+        actionId: id,
+        status: base.status === "pending" ? "pending" : "blocked",
+        reason: base.reason,
+        verdict: result.verdict,
+        ...(result.code !== undefined ? { code: result.code } : {}),
+      };
+    } finally {
+      reserved.delete(i.testId);
     }
-    base.reason = redactSecrets(base.reason);
-    actions.set(id, base);
-    record(base, "request_stop");
-    return { actionId: id, status: base.status === "pending" ? "pending" : "blocked", reason: base.reason };
   }
 
   function get(actionId: string): Action {
@@ -172,6 +214,16 @@ export function createGate(deps: {
     if (a.inFlight) return view(a);
     if (a.status !== "pending") return view(a);
     if (expireIfStale(a)) return view(a);
+
+    for (const other of actions.values()) {
+      if (other.actionId === a.actionId || other.testId !== a.testId) continue;
+      if (other.inFlight || other.status === "executed") {
+        return {
+          ...view(a),
+          reason: `refused: another stop for this test is ${other.status === "executed" ? "already executed" : "in flight"} (action ${other.actionId})`,
+        };
+      }
+    }
 
     a.inFlight = true; // set synchronously, before any await
     try {
