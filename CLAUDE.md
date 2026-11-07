@@ -100,8 +100,10 @@ Record every write attempt, blocked or approved, with the reason, timestamp and 
 
 ### Money numbers for the pitch (re-verify in code at the event)
 
-- Onboarding clears the boundary in week 9 (z ≈ 4.5 vs 2.71, confirmed by two independent checks); shipping the winner then is worth **≈ $20k** more on Lumen (independent check ≈ $19.4k). Say "≈ $20k" until the implementation computes it (AC-11).
-- **Do not claim $50k or $21k.**
+- Onboarding: "not yet" at week 2 (no user has 60 days), first crossing at **week 9** (z ≈ 4.3 vs boundary 2.71, day-aligned looks; two independent checks agree on week 9).
+- Money: shipping at week 9 is worth **about $19k** (implementation $19.4k, independent matched-cohort check $17.5k; real uncertainty ±25%). **Never say $19,409.86, $50k or $21k.**
+- Settings 16 Aug (AC-PEEK): z 2.0 vs boundary 3.3; naive p **just under 0.05** that day (0.045; a permutation test gives 0.050; a day either side 0.07). Say "an agent peeking that day would have shipped it; the boundary was 3.3, so Fulcrum blocks regardless". Never "0.044, significant".
+- Simulation (AC-CALIB): naive weekly peeking **over 20% (≈ 22%)** false winners, boundary **about 5%**.
 
 ### Demo staging
 

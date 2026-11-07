@@ -99,6 +99,13 @@ Shortened paraphrases of the briefs; the point is what each one withholds or nar
 - **What we changed:** the demo agent runs inside Claude Code's OS-level Bash sandbox (writes only in `demo/`, no unsandboxed retry, refuses to start without the sandbox, no localhost access), has no file-edit tools, and policy and loader files (`.claude`, `.mcp.json`, `tsconfig.json`, `node_modules`, `package.json`, `.env*` …) are write-denied. Fulcrum is launched with `node ../node_modules/tsx/dist/cli.mjs --tsconfig ../tsconfig.json`, so nothing in `demo/` changes what code it loads; a regression test plants a hostile tsconfig and proves it is ignored (with a control run that proves the test can catch it).
 - **Known limit:** it is still the same OS user; production would run Fulcrum under a separate user or from a read-only install.
 
+### Verdict engine reviews (Tasks 6–8, Sat 7 Nov, ~16:00–17:00, Sonnet + Fable)
+
+- **Who:** fresh reviewers per task; Fable for the verdicts (Task 8), with permission to re-derive numbers through the project's loader.
+- **Found:** the maths reproduced (Welch, boundary, simulation: an independent 2M-run check gave 22.5% naive vs 5.1% with c = 2.1). Fable found that looks anchored on the first install's time of day, so a date-only `as_of` of 16 Aug silently hit the previous look; non-goal timelines still showed "crossed" rows; the two Settings "end" views were unlabelled; and SPEC.md attributed p 0.067 (revenue to date) to the 30-day goal.
+- **What we changed:** day-aligned looks (re-derived independently: week 9 z moved 4.49 → 4.34 because 41 users installed in the four-hour gap leave the sample; same week, same verdict), no crossings on non-goal metrics, labelled end views, corrected SPEC. Following the project rule, the spec moved, not the test tolerance.
+- **What we will say on stage because of it:** "about $19k" (an independent matched-cohort check gives $17.5k), "p just under 0.05 on that day's check" (a permutation test gives 0.050), never the false-precision figures.
+
 ## Phases
 
 One entry per build phase, written at the end of `phase-checkpoint` in Djordje's words.
