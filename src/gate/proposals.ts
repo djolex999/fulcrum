@@ -17,9 +17,9 @@ export const DRAFT_NOTE = "Fulcrum will create the test as a draft; starting it 
 
 const DEFAULT_TTL_MS = 30 * 60 * 1000;
 // The goal written into Adapty, structured so a human and the verdict engine read the same thing.
-const GOAL_METRIC = "rpi_60d";
-const HORIZON_DAYS = 60;
-const GOAL_K = 15;
+export const GOAL_METRIC = "rpi_60d";
+export const HORIZON_DAYS = 60;
+export const GOAL_K = 15;
 
 export interface ProposalRequest {
   placement: Placement;

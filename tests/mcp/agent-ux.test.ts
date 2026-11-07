@@ -129,6 +129,8 @@ describe.skipIf(!real)("AGENT-UX every non-success reply names the next step", (
     const p = await call("propose_test", { placement: "ai_limit_reached", flows: ["fl-pro", "fl-3p"], audience: "all", hypothesis: "5+ edits users pay twice as often" });
     expect(p.json.status).toBe("pending");
     expect(String(p.json.reason)).toMatch(/^Next: a human must approve at .*127\.0\.0\.1.*poll request_status with action_id /);
+    // The agent is told which goal the draft gets, so it doesn't report "no goal metric yet".
+    expect(p.json.declared_goal).toEqual({ metric: "rpi_60d", horizon_days: 60, K: 15 });
     const pb = await call("propose_test", { placement: "main", flows: ["fl-pro", "fl-3p"], audience: "all", hypothesis: "x" });
     expect(pb.json).toMatchObject({ status: "blocked", policy_rule: "allowed_placements" });
     expect(String(pb.json.reason)).toMatch(/propose the test on an allowed placement/);
