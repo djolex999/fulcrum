@@ -19,3 +19,6 @@ data/
 
 # OS
 .DS_Store
+
+# Fulcrum runtime state (ledger)
+.fulcrum/

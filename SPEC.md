@@ -30,9 +30,9 @@ The agent gets only these tools. There is no approve tool: approval happens only
 | Tool | Input | Output | Errors |
 |---|---|---|---|
 | `list_tests` | `{}` | `[{test_id, title, state, placement, goal_metric, horizon_days}]` | `ADAPTY_UNAVAILABLE` |
-| `judge_test` | `{test_id, as_of?: date, metric?: string}` | `{verdict, goal_metric, look_k, K, K_source, horizon_days, z, boundary, effect, p_naive, arms[], source, reasons[]}` | `UNKNOWN_TEST`, `METRIC_NOT_GOAL`, `BEFORE_HORIZON`, `INVALID_AS_OF`, `AS_OF_REQUIRES_CSV` |
-| `test_timeline` | `{test_id, metric?: string}` | `{goal_metric, K, K_source, looks: [{k, date, z, boundary, crossed, leader, p_naive}], first_crossing?: {k, date, arm}, end: {leader, effect, p_naive}, source}` | `UNKNOWN_TEST`, `METRIC_NOT_GOAL` |
-| `request_stop` | `{test_id, winner_arm_id, metric, rationale, as_of?: date}` | `{action_id, status: "blocked" \| "pending", verdict, reason}` | `UNKNOWN_TEST`, `NOT_LIVE`, `UNKNOWN_ARM`, `DUPLICATE_PENDING` |
+| `judge_test` | `{test_id, as_of?: date, metric?: string, source?: "csv" \| "adapty_metrics"}` | `{verdict, goal_metric, look_k, K, K_source, horizon_days, z, boundary, effect, p_naive, arms[], source, reasons[]}` | `UNKNOWN_TEST`, `INVALID_AS_OF`, `AS_OF_REQUIRES_CSV`, `ADAPTY_UNAVAILABLE`, `NOT_IMPLEMENTED` (`METRIC_NOT_GOAL` and `BEFORE_HORIZON` are verdict codes, not errors) |
+| `test_timeline` | `{test_id, metric?: string}` | `{goal_metric, K, K_source, looks: [{k, date, z, boundary, crossed, leader, p_naive}], first_crossing?: {k, date, arm}, end: {leader, effect, p_naive}, source}` | `UNKNOWN_TEST`, `ADAPTY_UNAVAILABLE`, `NOT_IMPLEMENTED` |
+| `request_stop` | `{test_id, winner_arm_id, metric, rationale, as_of?: date}` | `{action_id, status: "blocked" \| "pending", verdict, reason}` | `UNKNOWN_TEST`, `INVALID_AS_OF`, `NOT_LIVE`, `UNKNOWN_ARM`, `DUPLICATE_PENDING`, `ADAPTY_UNAVAILABLE` (a request still being judged returns `blocked`, "request in progress"; `BEFORE_HORIZON` and `METRIC_NOT_GOAL` are `blocked` results with that code) |
 | `propose_test` | `{placement, flows: [flow_a, flow_b], audience: segment_id \| "all", traffic_share, hypothesis}` | `{action_id, status: "blocked" \| "pending", policy_rule?, reason}` | `UNKNOWN_PLACEMENT`, `UNKNOWN_FLOW`, `TEST_ALREADY_RUNNING`, `DUPLICATE_PENDING` |
 | `request_status` | `{action_id}` | `{action_id, status: blocked \| pending \| approved \| rejected \| executed \| failed, approved_by?, executed_at?, cli_result?}` | `UNKNOWN_ACTION` |
 
