@@ -5,6 +5,8 @@ export interface AbTestSummary {
   title: string;
   state: AbTestState;
   placementTitle: string;
+  /** The placement id; live-test policy matches on this, never on the title. Absent only in fakes. */
+  placementId?: string;
 }
 
 export interface AbTestDetail extends AbTestSummary {

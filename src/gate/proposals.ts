@@ -188,7 +188,7 @@ export function createProposals(deps: {
       try {
         const r = checkCreate(
           policy,
-          { placementDeveloperId: key, placementTitle: i.placement.title, challengerWeight: i.challengerWeight, writesToday: writesToday() },
+          { placementDeveloperId: key, placementId: i.placement.id, challengerWeight: i.challengerWeight, writesToday: writesToday() },
           await liveTests(),
         );
         if (r.ok) {
@@ -253,7 +253,7 @@ export function createProposals(deps: {
       try {
         const r = checkCreate(
           policy,
-          { placementDeveloperId: p.placement, placementTitle: p.placementTitle, challengerWeight: p.flows[1]?.weight ?? 100, writesToday: writesToday() },
+          { placementDeveloperId: p.placement, placementId: p.placementId, challengerWeight: p.flows[1]?.weight ?? 100, writesToday: writesToday() },
           await liveTests(),
         );
         if (!r.ok) {

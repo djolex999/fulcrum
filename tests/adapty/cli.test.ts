@@ -84,7 +84,7 @@ describe("createAdaptyCli", () => {
   it("listTests maps {data, meta}", async () => {
     const { run } = fakeRunner([{ stdout: LIST_JSON }]);
     const tests = await createAdaptyCli({ appId: APP, token: TOKEN, run }).listTests();
-    expect(tests).toEqual([{ abTestId: "a1", title: "T", state: "live", placementTitle: "P" }]);
+    expect(tests).toEqual([{ abTestId: "a1", title: "T", state: "live", placementTitle: "P", placementId: "p" }]);
   });
 
   it("getTest maps flows to arms", async () => {

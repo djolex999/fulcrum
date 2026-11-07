@@ -24,6 +24,7 @@ const ONB: AbTestDetail = {
   title: "Onboarding: annual trial vs weekly first",
   state: "live",
   placementTitle: "Onboarding",
+  placementId: "pl-onb",
   arms: [
     { armId: "fl-trial", name: "Onboarding - Annual trial" },
     { armId: "fl-weekly", name: "Onboarding - Weekly first" },
@@ -34,6 +35,7 @@ const SET: AbTestDetail = {
   title: "Settings: upgrade vs lifetime anchor",
   state: "live",
   placementTitle: "Settings",
+  placementId: "pl-set",
   arms: [
     { armId: "fl-lifetime", name: "Main - Lifetime anchor" },
     { armId: "fl-settings", name: "Settings - Upgrade" },

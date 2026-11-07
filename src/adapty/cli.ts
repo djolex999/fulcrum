@@ -47,6 +47,7 @@ function toSummary(t: RawTest): AbTestSummary {
     title: t.title,
     state: t.state,
     placementTitle: t.placement.title,
+    placementId: t.placement.placement_id,
   };
 }
 

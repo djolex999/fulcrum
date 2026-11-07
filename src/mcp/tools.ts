@@ -281,7 +281,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   );
 
   // propose_test: the closed loop. The agent proposes a NEW test; Fulcrum checks policy and queues it for a
-  // human. Nothing is created until a human approves; then Fulcrum creates the draft and starts it.
+  // human. Nothing is created until a human approves; then Fulcrum creates a draft only; a human starts it in Adapty.
   tool(
     "propose_test",
     "Propose a new A/B test on a placement (Fulcrum only ever creates it as a draft; starting it is a human decision in Adapty): two flow ids (control first, challenger second), the challenger's traffic share in percent, an audience (all or a segment id) and a hypothesis. Fulcrum checks policy (allowed placement, max challenger weight, no live test there, daily write limit); a human must approve at the approval page. There is no approve tool. Use placement and flow ids or names from Adapty; blocked replies cite the policy rule, pending ones say to poll request_status.",
@@ -319,7 +319,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
       });
       if (r.code === "DUPLICATE_PENDING") {
         if (r.policyRule === "in_progress") {
-          return { action_id: r.actionId, status: "blocked", reason: "request in progress, retry propose_test in a moment" };
+          return { action_id: r.actionId, status: "blocked", policy_rule: "request_in_progress", reason: "request in progress, retry propose_test in a moment" };
         }
         throw new ToolError("DUPLICATE_PENDING", `action ${r.actionId} is already pending for this placement; poll request_status with it`);
       }

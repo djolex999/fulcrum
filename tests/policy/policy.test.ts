@@ -49,8 +49,8 @@ describe("AC-POLICY", () => {
 
   it("AC-POLICY every block cites its rule", () => {
     const policy = (loadPolicy(write(GOOD)) as { policy: Policy }).policy;
-    const t = (title: string, state: AbTestSummary["state"]): AbTestSummary => ({ abTestId: title, title, state, placementTitle: "AI edits limit reached" });
-    const base = { placementDeveloperId: "ai_limit_reached", placementTitle: "AI edits limit reached", challengerWeight: 50, writesToday: 0 };
+    const t = (title: string, state: AbTestSummary["state"]): AbTestSummary => ({ abTestId: title, title, state, placementTitle: "AI edits limit reached", placementId: "pl-ai" });
+    const base = { placementDeveloperId: "ai_limit_reached", placementId: "pl-ai", challengerWeight: 50, writesToday: 0 };
     const rule = (r: ReturnType<typeof checkCreate>): string => (r.ok ? "ok" : r.rule);
     expect(rule(checkCreate(policy, base, []))).toBe("ok");
     expect(rule(checkCreate(policy, { ...base, placementDeveloperId: "main" }, []))).toBe("allowed_placements");

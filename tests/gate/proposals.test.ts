@@ -27,7 +27,7 @@ const FLOWS: Flow[] = [
   { id: "fl-pro", name: "AI limit reached - Pro", status: "published" },
   { id: "fl-3p", name: "Main - 3 plans", status: "published" },
 ];
-const sum = (title: string, state: AbTestSummary["state"], placementTitle: string): AbTestSummary => ({ abTestId: `id-${title}`, title, state, placementTitle });
+const sum = (title: string, state: AbTestSummary["state"], placementTitle: string): AbTestSummary => ({ abTestId: `id-${title}`, title, state, placementTitle, placementId: PLACEMENTS.find((p) => p.title === placementTitle)?.id ?? "pl-other" });
 const STARTED: AbTestDetail = { abTestId: "new-1", title: "x", state: "live", placementTitle: "AI edits limit reached", arms: [] };
 const PROPOSAL = { placement: "ai_limit_reached", flows: ["fl-pro", "fl-3p"], audience: "all", hypothesis: "5+ edits users pay about twice as often" };
 
@@ -146,6 +146,27 @@ describe("propose_test through the gate", () => {
     const r = await call("propose_test", PROPOSAL);
     expect(r.json).toMatchObject({ status: "blocked", policy_rule: "live_test_on_placement" });
     expect(String(r.json.reason)).toContain("AI limit: live one");
+  });
+
+  it("AC-LOOP the live-test rule matches by placement id, even when the title is long or oddly spaced", async () => {
+    const odd = `AI  edits   limit reached ${"x".repeat(150)}`;
+    PLACEMENTS[0] = { id: "pl-ai", developerId: "ai_limit_reached", title: odd };
+    try {
+      tests.push({ abTestId: "live-1", title: "Live on AI", state: "live", placementTitle: "something else entirely", placementId: "pl-ai" });
+      const { call, gate } = await setup();
+      const r = await call("propose_test", PROPOSAL);
+      expect(r.json).toMatchObject({ status: "blocked", policy_rule: "live_test_on_placement" });
+      // and at approval: a pending proposal is blocked when a live test appears on the id
+      tests.pop();
+      const ok = await call("propose_test", PROPOSAL);
+      expect(ok.json.status).toBe("pending");
+      tests.push({ abTestId: "live-2", title: "Live on AI", state: "live", placementTitle: "other", placementId: "pl-ai" });
+      const done = await gate.approve(String(ok.json.action_id), "Djordje");
+      expect(done).toMatchObject({ status: "blocked", policyRule: "live_test_on_placement" });
+      expect(order).toEqual([]);
+    } finally {
+      PLACEMENTS[0] = { id: "pl-ai", developerId: "ai_limit_reached", title: "AI edits limit reached" };
+    }
   });
 
   it("AC-LOOP an existing draft on the placement is named but does not block", async () => {

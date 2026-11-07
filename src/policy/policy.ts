@@ -70,8 +70,8 @@ export function isApprover(policy: Policy, name: string): boolean {
 
 export interface CreateProposal {
   placementDeveloperId: string;
-  /** Tests list the placement by title, so that is how live tests are matched. */
-  placementTitle: string;
+  /** Live tests are matched to the placement by id (titles can differ in whitespace or length). */
+  placementId: string;
   challengerWeight: number;
   /** Writes already executed today (UTC), counted by the gate from the ledger. */
   writesToday: number;
@@ -98,7 +98,8 @@ export function checkCreate(policy: Policy, p: CreateProposal, liveTests: readon
       reason: `challenger weight ${p.challengerWeight} is above the policy maximum ${policy.maxChallengerWeight}; propose again with challenger_weight at most ${policy.maxChallengerWeight}`,
     };
   }
-  const here = liveTests.filter((t) => t.placementTitle === p.placementTitle);
+  // A test whose placement id is unknown cannot be ruled out, so it counts as being here (fail closed).
+  const here = liveTests.filter((t) => t.placementId === undefined || t.placementId === p.placementId);
   const live = here.find((t) => t.state === "live");
   if (live) {
     return {
