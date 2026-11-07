@@ -5,7 +5,11 @@ import type { Dataset } from "../data/csv.js";
 export const FALLBACK_K = 15;
 
 export interface TestPlan {
+  /** The Adapty test title this plan belongs to (exact match). */
   title: string;
+  /** The ab_test title its users carry in the CSV export, when it differs from `title`. A throwaway rehearsal test reuses
+   *  Onboarding's data this way, so it gets Onboarding's verdict. Defaults to `title`. */
+  dataTitle?: string;
   arms: [string, string];
   /** Adapty flow_name of each arm, same order as `arms`. Needed to map Adapty arm ids to CSV flows. */
   adaptyFlowNames?: [string, string];
@@ -22,6 +26,11 @@ export class UnknownTestError extends Error {
     super(`Unknown test "${title}": no users in the dataset carry this ab_test title`);
     this.name = "UnknownTestError";
   }
+}
+
+/** The ab_test title whose CSV users this plan is judged on. */
+export function dataTitleOf(plan: TestPlan): string {
+  return plan.dataTitle ?? plan.title;
 }
 
 export const DEFAULT_PLANS_PATH = fileURLToPath(new URL("../../test-plans.json", import.meta.url));
@@ -57,21 +66,24 @@ function parsePlan(raw: unknown, i: number): TestPlan {
   if (K !== undefined && !(typeof K === "number" && Number.isInteger(K) && K >= 1)) {
     throw bad(`"${r.title}" K must be an integer >= 1`);
   }
+  const dt = r.dataTitle;
+  if (dt !== undefined && !(typeof dt === "string" && dt !== "")) throw bad(`"${r.title}" dataTitle must be a non-empty string`);
   const plan: TestPlan = { title: r.title, arms: [arms[0] as string, arms[1] as string], goal: "rpi", horizonDays: h };
+  if (dt !== undefined) plan.dataTitle = dt;
   if (names !== undefined) plan.adaptyFlowNames = [names[0] as string, names[1] as string];
   if (K !== undefined) plan.K = K;
   goalMetricOf(plan);
   return plan;
 }
 
-/** Reads and validates the plans. With `data`, every plan title must exist in the dataset or UnknownTestError names it. */
+/** Reads and validates the plans. With `data`, every plan's data title must exist in the dataset or UnknownTestError names it. */
 export function loadPlans(path: string = DEFAULT_PLANS_PATH, data?: Dataset): TestPlan[] {
   const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
   if (!Array.isArray(parsed)) throw new Error(`${path} must be a JSON array of test plans`);
   const plans = parsed.map(parsePlan);
   if (data) {
     const titles = new Set(data.users.map((u) => u.abTest));
-    for (const p of plans) if (!titles.has(p.title)) throw new UnknownTestError(p.title);
+    for (const p of plans) if (!titles.has(dataTitleOf(p))) throw new UnknownTestError(dataTitleOf(p));
   }
   return plans;
 }

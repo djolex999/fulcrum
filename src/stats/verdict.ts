@@ -6,7 +6,7 @@
 
 import type { Dataset, User } from "../data/csv.js";
 import { boundary, C_TABLE, calibrateC } from "./boundary.js";
-import { FALLBACK_K, goalMetricOf, UnknownTestError } from "./plans.js";
+import { dataTitleOf, FALLBACK_K, goalMetricOf, UnknownTestError } from "./plans.js";
 import type { Metric, TestPlan } from "./plans.js";
 import { userRevenue, welch } from "./rpi.js";
 
@@ -89,8 +89,8 @@ export interface PlanData {
 
 // Picks the test's users from the CSV and splits them into the plan's two arms.
 export function planData(plan: TestPlan, data: Dataset): PlanData {
-  const inTest = data.users.filter((u) => u.abTest === plan.title);
-  if (inTest.length === 0) throw new UnknownTestError(plan.title);
+  const inTest = data.users.filter((u) => u.abTest === dataTitleOf(plan));
+  if (inTest.length === 0) throw new UnknownTestError(dataTitleOf(plan));
   const users: [User[], User[]] = [
     inTest.filter((u) => u.flow === plan.arms[0]),
     inTest.filter((u) => u.flow === plan.arms[1]),
