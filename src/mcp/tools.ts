@@ -12,7 +12,9 @@ import { AdaptyCliError } from "../adapty/cli.js";
 import type { createGate, Judge } from "../gate/pending.js";
 import type { Proposals } from "../gate/proposals.js";
 import { goalMetricOf, type TestPlan } from "../stats/plans.js";
+import { GOAL_K, GOAL_METRIC, HORIZON_DAYS } from "../gate/proposals.js";
 import { checkArmMapping, flowOfArm, planForTitle, validArmsHint } from "./engine.js";
+import type { StopLabels } from "../ui/labels.js";
 import { ToolError } from "./errors.js";
 
 type Gate = ReturnType<typeof createGate>;
@@ -52,6 +54,8 @@ export interface ToolDeps {
   signals?: () => Promise<Record<string, unknown>>;
   /** Test plans, joined to Adapty tests by title (list_tests goal and horizon; arm mapping check). */
   plans?: readonly TestPlan[];
+  /** Display names for pending stops on the approval page (test title, arm name). Never used for decisions. */
+  labels?: StopLabels;
   /** Where the human approves (shown to the agent in a pending reply). Defaults to the default port. */
   approvalUrl?: string;
   log?: (message: string) => void;
@@ -219,6 +223,10 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
         rationale: a.rationale,
         ...(asOf ? { asOf } : {}),
       });
+      if (r.status === "pending") {
+        const armName = test.arms.find((arm) => arm.armId === a.winner_arm_id)?.name ?? "";
+        deps.labels?.set(r.actionId, { testTitle: test.title, armName });
+      }
       // Two cases. verdict UNKNOWN: the first request is still being judged, so say "retry in a moment".
       // Otherwise a stop for this test is already waiting for a human, which is an error.
       if (r.code === "DUPLICATE_PENDING") {
@@ -286,7 +294,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   // human. Nothing is created until a human approves; then Fulcrum creates a draft only; a human starts it in Adapty.
   tool(
     "propose_test",
-    "Propose a new A/B test on a placement (Fulcrum only ever creates it as a draft; starting it is a human decision in Adapty): two flow ids (control first, challenger second), the challenger's traffic share in percent, an audience (all or a segment id) and a hypothesis. Fulcrum checks policy (allowed placement, max challenger weight, no live test there, daily write limit); a human must approve at the approval page. There is no approve tool. Use placement and flow ids or names from Adapty; blocked replies cite the policy rule, pending ones say to poll request_status.",
+    "Propose a new A/B test on a placement (Fulcrum only ever creates it as a draft; starting it is a human decision in Adapty): two flow ids (control first, challenger second), the challenger's traffic share in percent, an audience (all or a segment id) and a hypothesis. Fulcrum sets the declared goal itself (60-day revenue per install, rpi_60d, 15 planned looks), so later verdicts judge the test on it. Fulcrum checks policy (allowed placement, max challenger weight, no live test there, daily write limit); a human must approve at the approval page. There is no approve tool. Use placement and flow ids or names from Adapty; blocked replies cite the policy rule, pending ones say to poll request_status.",
     {
       placement: z.string().min(1),
       flows: z.tuple([z.string().min(1), z.string().min(1)]),
@@ -334,6 +342,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
             ? `Next: a human must approve at ${approvalUrl}; poll request_status with action_id ${r.actionId}. ${r.reason}`
             : r.reason,
         ...(r.notes.length > 0 ? { existing_draft: r.notes } : {}),
+        declared_goal: { metric: GOAL_METRIC, horizon_days: HORIZON_DAYS, K: GOAL_K },
       };
     },
   );

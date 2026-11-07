@@ -97,6 +97,20 @@ describe("approval page", () => {
     expect(html).not.toContain("<script");
   });
 
+  it("a pending card shows the test title and arm name (escaped) next to the ids", async () => {
+    const ledger = createLedger(join(dir, "labels.jsonl"));
+    const gate = createGate({ cli: { stopTest: async () => DETAIL }, ledger, judge: winner });
+    const labels = new Map<string, { testTitle: string; armName: string }>();
+    const app = buildApprovalApp(gate, ledger, { port: PORT, loginCode: LOGIN, csrfSecret: CSRF_SECRET, labels });
+    const s = await loginSession(app);
+    const { actionId } = await gate.requestStop(REQ);
+    labels.set(actionId, { testTitle: "Throwaway B: <rehearsal>", armName: "Onboarding - Weekly first" });
+    const html = await (await app.request("/", { headers: { host: HOST, cookie: s.cookie } })).text();
+    expect(html).toContain("Throwaway B: &lt;rehearsal&gt;");
+    expect(html).toContain("Onboarding - Weekly first");
+    expect(html).toContain("t1");
+  });
+
   it("the rationale is shown escaped on the page", async () => {
     const { gate, app } = await setup();
     await gate.requestStop({ ...REQ, rationale: "<b>because</b> ship it" });

@@ -9,6 +9,7 @@ import { createGate } from "../gate/pending.js";
 import { createProposals, type Proposals } from "../gate/proposals.js";
 import { loadPolicy } from "../policy/policy.js";
 import { startApprovalPage } from "../ui/approve.js";
+import type { StopLabels } from "../ui/labels.js";
 import { createLogger } from "./log.js";
 import { loadDataset } from "../data/csv.js";
 import { loadPlans } from "../stats/plans.js";
@@ -38,9 +39,10 @@ export async function main(opts: { startApprovalPage?: (gate: Gate, port: number
   const policy = loadPolicy();
   if (!policy.ok) log(`policy invalid, proposals blocked: ${policy.reason}`);
   const proposals = createProposals({ cli, ledger, policy });
-  const server = buildServer({ cli, gate, proposals, judge, timeline, signals, plans, approvalUrl: `http://127.0.0.1:${config.port}/`, log, scrub });
+  const labels: StopLabels = new Map();
+  const server = buildServer({ cli, gate, proposals, labels, judge, timeline, signals, plans, approvalUrl: `http://127.0.0.1:${config.port}/`, log, scrub });
   // The human approval page: the only path to approve a write. Injectable for tests.
-  const startPage = opts.startApprovalPage ?? ((g: Gate, p: number, pr: Proposals) => startApprovalPage(g, p, ledger, log, undefined, pr));
+  const startPage = opts.startApprovalPage ?? ((g: Gate, p: number, pr: Proposals) => startApprovalPage(g, p, ledger, log, undefined, pr, labels));
   startPage(gate, config.port, proposals);
   await server.connect(new StdioServerTransport());
   log("Fulcrum MCP server ready on stdio");
