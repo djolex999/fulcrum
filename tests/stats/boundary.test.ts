@@ -31,8 +31,8 @@ describe("boundary", () => {
     expect(boundary(2.1, 15, 15)).toBeCloseTo(2.1, 12);
   });
 
-  it("calibrateC(15) is within 2.1 ± 0.05", () => {
-    expect(Math.abs(calibrateC(15) - 2.1)).toBeLessThan(0.05);
+  it("calibrateC(15) is within 2.11 ± 0.03", () => {
+    expect(Math.abs(calibrateC(15) - 2.11)).toBeLessThan(0.03);
   });
 
   it("C_TABLE contains 15: 2.1", () => {

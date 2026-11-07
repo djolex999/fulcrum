@@ -9,10 +9,9 @@
 const NAIVE_THRESHOLD = 1.96;
 /** Sims used by calibrateC. Fixed so the result is deterministic. */
 export const CALIBRATION_SIMS = 40_000;
-const CALIBRATION_TOLERANCE = 0.002;
 const C_LOW = 1.5;
 const C_HIGH = 4;
-const MAX_BISECTIONS = 60;
+const BISECTIONS = 40;
 
 export function boundary(c: number, K: number, k: number): number {
   if (!Number.isInteger(K) || K < 1) throw new RangeError(`K must be an integer >= 1, got ${K}`);
@@ -96,29 +95,28 @@ export function simulateFalseWins(opts: {
 }
 
 /**
- * Finds c such that the boundary's false-win rate is within 0.002 of `target`, by bisection
- * on [1.5, 4] over CALIBRATION_SIMS (40,000) seeded sims reused across all iterations
- * (common random numbers, so the rate is monotone in c). Deterministic.
+ * Finds c such that the boundary's false-win rate is the target, by fixed-iteration bisection
+ * (BISECTIONS = 40, no tolerance exit) on [1.5, 4] over CALIBRATION_SIMS (40,000) seeded sims
+ * reused across all iterations (common random numbers, so the rate is monotone in c).
+ * Deterministic per seed.
  */
 export function calibrateC(K: number, target = 0.05, seed = 1): number {
   const { maxScaledZ } = simulateStats(K, CALIBRATION_SIMS, seed);
   let lo = C_LOW;
   let hi = C_HIGH;
-  let mid = (lo + hi) / 2;
-  for (let i = 0; i < MAX_BISECTIONS; i++) {
-    mid = (lo + hi) / 2;
-    const rate = fractionAbove(maxScaledZ, mid);
-    if (Math.abs(rate - target) <= CALIBRATION_TOLERANCE) return mid;
-    if (rate > target) lo = mid;
+  for (let i = 0; i < BISECTIONS; i++) {
+    const mid = (lo + hi) / 2;
+    if (fractionAbove(maxScaledZ, mid) > target) lo = mid;
     else hi = mid;
   }
-  return mid;
+  return (lo + hi) / 2;
 }
 
 /**
- * Precomputed constants, rounded to 2 decimals. 15 is the brief's value (calibrateC(15) gives
- * 2.125, inside its 0.002 tolerance). 10 and 20 are omitted: calibrateC stops at the first c within
- * tolerance, so its values are only good to about +/-0.03 and would not be a trustworthy table.
+ * Precomputed constants, rounded to 2 decimals. 15 is the brief's value; an independent 2M-sim
+ * check puts the exact c for 5% at about 2.11, and calibrateC(15) (40k sims, seed 1) gives 2.128
+ * from sampling noise. 10 and 20 are omitted: at 40k sims calibrateC is only good to about
+ * +/-0.02, so those entries would not be trustworthy.
  */
 export const C_TABLE: Readonly<Record<number, number>> = {
   15: 2.1,
