@@ -46,6 +46,8 @@ export interface ToolDeps {
   timeline: TimelineFn;
   /** Test plans, joined to Adapty tests by title (list_tests goal and horizon; arm mapping check). */
   plans?: readonly TestPlan[];
+  /** Where the human approves (shown to the agent in a pending reply). Defaults to the default port. */
+  approvalUrl?: string;
   log?: (message: string) => void;
   // Redacts secrets from everything the agent receives (see ok/fail below).
   scrub?: (text: string) => string;
@@ -71,6 +73,7 @@ function parseAsOf(raw: string | undefined): Date | undefined {
 export function registerTools(server: McpServer, deps: ToolDeps): void {
   const { cli, gate, judge, timeline } = deps;
   const plans = deps.plans ?? [];
+  const approvalUrl = deps.approvalUrl ?? "http://127.0.0.1:8787/";
   const log = deps.log ?? (() => {});
   const scrub = deps.scrub ?? ((s: string) => s);
 
@@ -119,7 +122,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   }
 
   // list_tests: what exists, its state, and the goal metric and horizon from the test plan.
-  tool("list_tests", "List the app's Adapty A/B tests.", {}, async () => {
+  tool("list_tests", "List the app's Adapty A/B tests. Use a test_id from the result with judge_test; goal_metric is the only metric a verdict can be asked on.", {}, async () => {
     const tests = await cli.listTests();
     return {
       tests: tests.map((t) => {
@@ -140,7 +143,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   // (CSV only, because live Adapty numbers can't be rewound).
   tool(
     "judge_test",
-    "Judge whether a test has a statistically supported winner. as_of replays the verdict at a past date (csv source only).",
+    "Judge whether a test has a statistically supported winner. as_of replays the verdict at a past date (csv source only). If not WINNER, the reasons say when to ask again or which metric to use.",
     {
       test_id: z.string(),
       as_of: z.string().optional(),
@@ -162,7 +165,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   // first supported, or that it never was.
   tool(
     "test_timeline",
-    "Weekly looks of a test against the sequential boundary.",
+    "Weekly looks of a test against the sequential boundary. Use it to see which look first crossed, or when the next look falls.",
     { test_id: z.string(), metric: z.string().optional() },
     async (a) => {
       await resolveTest(a.test_id);
@@ -174,7 +177,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   // winner becomes "pending" for a human; everything else is "blocked" with the reason.
   tool(
     "request_stop",
-    "Ask to stop a live test with a declared winner. Fulcrum judges it first; a human must approve in the Fulcrum UI. There is no approve tool.",
+    "Ask to stop a live test with a declared winner. Fulcrum judges it first; a human must approve in the Fulcrum UI. There is no approve tool. pending means a human must approve at the approval page; poll request_status. blocked means read the reason for the next step.",
     {
       test_id: z.string(),
       winner_arm_id: z.string(),
@@ -223,11 +226,17 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
       }
       // Evidence comes from the very judge result the gate decided on (one call): it can't contradict the decision.
       const d = r.detail;
+      // Pending: say who approves and where, and how to follow up. Blocked: the reason already carries
+      // the verdict's next step (when to ask again, which metric to use), so it is passed through unchanged.
+      const reason =
+        r.status === "pending"
+          ? `${r.reason} Waiting for human approval at ${approvalUrl} (the approver signs in from the link Fulcrum opened in their browser). Poll request_status with action_id ${r.actionId}.`
+          : r.reason;
       return {
         action_id: r.actionId,
         status: r.status,
         verdict: r.verdict,
-        reason: r.reason,
+        reason,
         ...(r.code ? { code: r.code } : {}),
         ...(d
           ? {
@@ -241,6 +250,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
                 boundary: d.boundary,
                 effect: d.effect,
                 p_naive: d.p_naive,
+                ...(d.next_look !== undefined ? { next_look: d.next_look } : {}),
                 source: d.source,
               },
             }
@@ -250,7 +260,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   );
 
   // request_status: lets the agent poll whether the human approved. It is read-only, it can't approve.
-  tool("request_status", "Check the status of a stop request.", { action_id: z.string() }, async (a) => {
+  tool("request_status", "Check the status of a stop request. pending: keep polling; executed: done; blocked or expired: ask judge_test and request_stop again if still warranted.", { action_id: z.string() }, async (a) => {
     let v;
     try {
       v = gate.status(a.action_id);

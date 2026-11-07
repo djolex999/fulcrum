@@ -30,7 +30,7 @@ export async function main(opts: { startApprovalPage?: (gate: Gate, port: number
   const plans = loadPlans();
   const { judge, timeline } = createEngine({ cli, plans, loadData: () => loadDataset(config.dataDir) });
   const gate = createGate({ cli, ledger, judge });
-  const server = buildServer({ cli, gate, judge, timeline, plans, log, scrub });
+  const server = buildServer({ cli, gate, judge, timeline, plans, approvalUrl: `http://127.0.0.1:${config.port}/`, log, scrub });
   // The human approval page: the only path to approve a write. Injectable for tests.
   const startPage = opts.startApprovalPage ?? ((g: Gate, p: number) => startApprovalPage(g, p, ledger, log));
   startPage(gate, config.port);

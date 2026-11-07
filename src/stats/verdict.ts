@@ -39,6 +39,8 @@ export interface Verdict {
   arms: ArmSummary[];
   source: "export_csv";
   reasons: string[];
+  /** When to ask again (additive): the next look that can change this answer. Absent for WINNER and NO_WINNER. */
+  nextLook?: { k: number; date: string };
 }
 
 export interface TimelineLook {
@@ -231,6 +233,7 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
       reasons: [
         `Refused: metric shopping. "${opts.metric}" is not this test's declared goal; the declared goal is ${goal} (from the test plan).`,
         "A verdict is only ever computed on the declared goal metric.",
+        `Ask judge_test for a verdict on ${goal} instead.`,
       ],
     };
   }
@@ -254,7 +257,11 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
     return {
       ...empty,
       code: "BEFORE_HORIZON",
-      reasons: [`No full weekly look has ended by ${isoDate(cutoffRaw)}; look 1 ends ${isoDate(lookEnd(pd, 1))}.`],
+      nextLook: { k: 1, date: isoDate(lookEnd(pd, 1)) },
+      reasons: [
+        `No full weekly look has ended by ${isoDate(cutoffRaw)}; look 1 ends ${isoDate(lookEnd(pd, 1))}.`,
+        `Ask again on/after ${isoDate(lookEnd(pd, 1))}.`,
+      ],
     };
   }
   // Cap at K (k <= K): the plan only has K looks. If the data runs longer, the verdict is the one at
@@ -273,11 +280,12 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
       code: "BEFORE_HORIZON",
       lookK: k,
       arms: armCounts(plan, pd, data, goal, cutoff),
+      ...(firstValid !== null ? { nextLook: { k: firstValid, date: isoDate(lookEnd(pd, firstValid)) } } : {}),
       reasons: [
         `Look ${k} of ${K} (ends ${isoDate(cutoff)}): fewer than 2 users per arm have the full ${horizonText} horizon yet, so ${goal} cannot be judged.`,
         firstValid === null
           ? `No planned look up to ${K} has a valid sample.`
-          : `The first valid look is look ${firstValid} of ${K} (ends ${isoDate(lookEnd(pd, firstValid))}).`,
+          : `The first valid look is look ${firstValid} of ${K} (ends ${isoDate(lookEnd(pd, firstValid))}); ask again on/after ${isoDate(lookEnd(pd, firstValid))}.`,
       ],
     };
   }
@@ -289,11 +297,16 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
   // WINNER if crossed. If not, CONTINUE while more looks remain, NO_WINNER once the last look has passed.
   const verdict: Verdict["verdict"] = crossed ? "WINNER" : k < K ? "CONTINUE" : "NO_WINNER";
   const where = `at look ${k} of ${K}`;
+  const next = !crossed && k < K ? { k: k + 1, date: isoDate(lookEnd(pd, k + 1)) } : undefined;
   const reasons = crossed
     ? [`|z| ${fmt(Math.abs(stats.z))} is at or above the boundary ${fmt(bound)} ${where}: ${stats.leader} wins on ${goal}.`]
     : [
         `z ${fmt(stats.z)} is below the boundary ${fmt(bound)} ${where}${k < K ? ": keep the test running." : ": last planned look reached, no winner."}`,
       ];
+  if (next) reasons.push(`Next valid look: look ${next.k}, ends ${next.date}; ask judge_test again then.`);
+  if (verdict === "NO_WINNER") {
+    reasons.push(`All planned looks are used; no winner on ${goal}. Keep the current default or plan a new test.`);
+  }
   // The classic peeking trap: naive p < 0.05 but still under the boundary. We say so out loud.
   if (!crossed && stats.p < 0.05) {
     reasons.push(`Naive p = ${stats.p.toFixed(3)} is under 0.05, but repeated looks inflate false wins; the boundary is what counts.`);
@@ -317,6 +330,7 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
     leader: stats.leader,
     winnerArm: crossed ? stats.leader : null,
     arms: stats.arms,
+    ...(next ? { nextLook: next } : {}),
     reasons,
   };
 }

@@ -109,6 +109,7 @@ export function createEngine(deps: {
       p_naive: v.pNaive,
       arms: v.arms.map((a) => ({ arm: a.arm, n: a.n, rpi: a.rpi })),
       source: v.source,
+      ...(v.nextLook ? { next_look: v.nextLook } : {}),
     };
   };
 
