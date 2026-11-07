@@ -25,11 +25,11 @@ The agent gets only these tools. There is no approve tool: approval happens only
 | Tool | Input | Output | Errors |
 |---|---|---|---|
 | `list_tests` | `{}` | `[{test_id, title, state, placement, goal_metric, horizon_days}]` | `ADAPTY_UNAVAILABLE` |
-| `get_verdict` | `{test_id, as_of?: date, metric?: string}` | `{verdict, goal_metric, look_k, K, K_source, horizon_days, z, boundary, effect, p_naive, arms[], source, reasons[]}` | `UNKNOWN_TEST`, `METRIC_NOT_GOAL`, `BEFORE_HORIZON`, `INVALID_AS_OF`, `AS_OF_REQUIRES_CSV` |
+| `judge_test` | `{test_id, as_of?: date, metric?: string}` | `{verdict, goal_metric, look_k, K, K_source, horizon_days, z, boundary, effect, p_naive, arms[], source, reasons[]}` | `UNKNOWN_TEST`, `METRIC_NOT_GOAL`, `BEFORE_HORIZON`, `INVALID_AS_OF`, `AS_OF_REQUIRES_CSV` |
 | `request_stop` | `{test_id, winner_arm_id, metric, rationale}` | `{action_id, status: "blocked" \| "pending", verdict, reason}` | `UNKNOWN_TEST`, `NOT_LIVE`, `UNKNOWN_ARM`, `DUPLICATE_PENDING` |
-| `get_action` | `{action_id}` | `{action_id, status: blocked \| pending \| approved \| rejected \| executed \| failed, approved_by?, executed_at?, cli_result?}` | `UNKNOWN_ACTION` |
+| `request_status` | `{action_id}` | `{action_id, status: blocked \| pending \| approved \| rejected \| executed \| failed, approved_by?, executed_at?, cli_result?}` | `UNKNOWN_ACTION` |
 
-- `request_stop` runs `get_verdict` itself. It returns `blocked` unless the verdict is `WINNER` on the goal metric for that arm.
+- `request_stop` runs `judge_test` itself. It returns `blocked` unless the verdict is `WINNER` on the goal metric for that arm.
 - Asking again after a block, or rephrasing, re-runs the same check: the result only changes if the data changes.
 - After approval Fulcrum runs `adapty ab-tests stop <id> --app <app> --winner <arm> --yes --json`, then confirms with `adapty ab-tests get --json`.
 
@@ -43,30 +43,30 @@ The agent gets only these tools. There is no approve tool: approval happens only
 
 | ID | Criterion |
 |---|---|
-| AC-1 | Settings `as_of` 2026-09-02 on revenue: naive p < 0.05 (≈ 0.049), but `|z|` < boundary (≈ 2.9), so `request_stop` returns `blocked`. |
-| AC-2 | Onboarding on 60-day revenue per install: no valid look before week 9; at week 9 the boundary is crossed and the verdict is `WINNER`. |
+| AC-1 | Settings `as_of` 2026-09-02 on revenue: naive p < 0.05 (≈ 0.049), but `|z|` < boundary (≈ 2.9), so `request_stop` returns `blocked`. (At the end state, p = 0.067 and z = 1.83, so the end state alone does not test the boundary.) |
+| AC-2 | Onboarding on 60-day revenue per install: no valid look before week 9; at week 9 the boundary is crossed (z ≈ 4.3 vs ≈ 2.7) and the verdict is `WINNER`. |
 | AC-3 | `request_stop` on Settings with `metric: "payer_rate"` (z ≈ 5.3) is refused with `METRIC_NOT_GOAL`, because its goal is revenue. |
 | AC-4 | A stop with no approval never runs the CLI; an approved action runs it exactly once; a rejected one never. |
 | AC-5 | The token value never appears in any tool output, error, ledger entry or log line. |
-| AC-6 | 2,000+ simulated A/A tests through the boundary give 5% ± 1.5% false wins; naive weekly peeking at p < 0.05 gives ≥ 20%. |
+| AC-6 | 2,000+ simulated A/A tests through the boundary give 5% ± 1.5% false wins; naive weekly peeking at p < 0.05 gives ≥ 20% (≈ 22.5% with 15 looks). |
 | AC-7 | Every `request_stop`, blocked or pending, adds exactly one ledger entry with a reason; approval adds `approved_by` and a timestamp. |
-| AC-8 | Every number in `get_verdict` carries `source`; `as_of` with `adapty_metrics` returns `AS_OF_REQUIRES_CSV`. |
-| AC-9 | With no K in the test plan, `get_verdict` returns `K_source: "fallback"`; with K given, it uses that K and the boundary changes. |
+| AC-8 | Every number in `judge_test` carries `source`; `as_of` with `adapty_metrics` returns `AS_OF_REQUIRES_CSV`. |
+| AC-9 | With no K in the test plan, `judge_test` returns `K_source: "fallback"`; with K given, it uses that K and the boundary changes. |
 | AC-10 | Repeating a blocked request with the same data returns `blocked` again, with no new pending action. |
 
 ## Test plan (write after kickoff; each test is named with its AC id)
 
-Stats tests use pytest on the Python stats script (fixtures read the offline CSV in place by absolute path). Gate and MCP tests use Vitest with the CLI mocked.
+All tests use Vitest (TypeScript). Stats tests read the offline CSV in place via `OFFLINE_DATA_DIR`; gate and MCP tests mock the CLI. Tests that write to Adapty run only with `ALLOW_WRITES=1`, set by a human.
 
 | AC | Test |
 |---|---|
-| AC-1 | `test_ac1_settings_sep2_blocked_despite_naive_p` |
-| AC-2 | `test_ac2_onboarding_no_valid_look_before_week9`, `test_ac2_onboarding_winner_at_week9` |
+| AC-1 | `AC-1 Settings as_of 2026-09-02 is blocked despite naive p < 0.05` |
+| AC-2 | `AC-2 Onboarding has no valid look before week 9`, `AC-2 Onboarding is WINNER at week 9 on 60-day revenue` |
 | AC-3 | `AC-3 request_stop on non-goal metric returns METRIC_NOT_GOAL` |
 | AC-4 | `AC-4 pending action never calls the CLI`, `AC-4 approved action calls the CLI once`, `AC-4 rejected action never calls the CLI` |
 | AC-5 | `AC-5 token absent from outputs, errors, ledger and logs` |
-| AC-6 | `test_ac6_boundary_false_win_rate_about_5pct`, `test_ac6_naive_peeking_false_win_rate_at_least_20pct` |
+| AC-6 | `AC-6 boundary false-win rate is about 5%`, `AC-6 naive peeking false-win rate is at least 20%` |
 | AC-7 | `AC-7 every request_stop writes one ledger entry` |
-| AC-8 | `test_ac8_every_number_has_source`, `AC-8 as_of with adapty_metrics is rejected` |
-| AC-9 | `test_ac9_fallback_K_is_visible`, `test_ac9_plan_K_changes_boundary` |
+| AC-8 | `AC-8 every number has a source label`, `AC-8 as_of with adapty_metrics is rejected` |
+| AC-9 | `AC-9 fallback K is visible`, `AC-9 K from the plan changes the boundary` |
 | AC-10 | `AC-10 repeated blocked request stays blocked, no new pending action` |

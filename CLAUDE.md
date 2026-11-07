@@ -9,7 +9,9 @@ Team Fulcrum (Djordje, Milica Petković) at the Adapty Hackathon Belgrade, 7 to 
 - Never copy anything from `~/Projects/adapty-seed-data-hack` into this repo (no data, no scripts).
 - Never write secrets anywhere. No API keys in files, logs, commits or chat.
 - Code freeze: **Sun 8 Nov, 15:00**.
-- Demo: 5 min + 3 min Q&A. Judged on business value and result, not code quality. Optimize for a working, convincing demo.
+- Demo: 5 min + 3 min Q&A. **Judging criteria:** (1) AI-native engineering, (2) ideas and product thinking, (3) implementation quality. The challenge: make subscription apps make more money.
+- **Deliverables:** the public repo, the submission form at code freeze, a 2-minute unlisted YouTube video (uploaded before Sun 13:00), the AI log, and the live demo.
+- **Detailed private context:** `CLAUDE.local.md` (local only, never committed). If it and this file disagree, `CLAUDE.local.md` is newer.
 
 ## Adapty
 
@@ -24,6 +26,8 @@ Team Fulcrum (Djordje, Milica Petković) at the Adapty Hackathon Belgrade, 7 to 
 - A stopped A/B test cannot be restarted. Treat `ab-tests stop` as irreversible.
 - Verify flags with `--help` before using any command; do not guess flags.
 - **Never run `adapty ab-tests stop` on the Onboarding or Main tests**, except in the live demo, and then only by Djordje. (Denied in `.claude/settings.json`.)
+- Deny rules match the literal command, so `npm test` could run CLI writes internally. **Integration tests that write to Adapty run only with `ALLOW_WRITES=1`, which Djordje sets himself. Never set it automatically.**
+- Fulcrum calls Adapty through the CLI, not through Adapty's MCP.
 
 ## Core invariant
 
@@ -31,19 +35,31 @@ Any tool that writes to Adapty creates a **pending action** that only executes a
 
 ## Stack
 
-- Next.js, TypeScript strict (no `any`): UI and agent.
-- Python + pandas script for stats, writes JSON that the Next.js side reads.
-- Ledger: JSON file or SQLite. No Supabase.
+TypeScript strict (no `any`), ESM, Node 22, Vitest. One language everywhere. Minimal dependencies: official `@modelcontextprotocol/sdk` (stdio), Hono for the approval page. Ledger: JSON file or SQLite. No Supabase, no Python.
+
+```
+src/mcp/server.ts        Fulcrum MCP server: list_tests, judge_test, request_stop, request_status
+src/adapty/cli.ts        execFile wrapper, always --json, token from env, reads and writes separated, never logs the token
+src/data/csv.ts          offline CSV loader, path from OFFLINE_DATA_DIR
+src/stats/rpi.ts         revenue per install by arm and horizon
+src/stats/boundary.ts    c * sqrt(K/k) and its calibration simulation
+src/stats/verdict.ts     verdict on the declared goal only, horizon, as_of replay, source label
+src/gate/pending.ts      pending write actions (nothing executes without approval)
+src/gate/ledger.ts       audit ledger: every write attempt, blocked or approved, reason, time, approver
+src/ui/approve.ts        Hono server: one page with pending actions, Approve and Reject
+tests/                   one or more tests per acceptance criterion, named with its AC id
+```
 
 ## Planned shape (decide after kickoff)
 
 Nothing here is built. Confirm or change it once the kickoff brief is out.
 
-- **What it is:** a guard layer between AI agents and Adapty. Agents can read everything; every change passes a statistical check and a human approval before Fulcrum executes it through the Adapty CLI (auth via `ADAPTY_TOKEN`).
-- **Money:** the stopping boundary works both ways. It blocks fake winners (Settings test, p = 0.067) and lets real winners ship weeks earlier (Onboarding). Adapty takes a share of customer revenue, so wrong test decisions cost Adapty too.
+- **What it is:** AI agents run paywall experiments that make subscription apps more money, without fooling themselves. Fulcrum is an MCP server between the agent and Adapty: the agent reads test data through Fulcrum's fixed read calls and has no direct write path; every write passes a statistical check and a human approval before Fulcrum executes it through the Adapty CLI (auth via `ADAPTY_TOKEN`).
+- **Why AI:** the statistics are plain deterministic code. The AI part is the agent doing growth work (finding the next hypothesis, proposing tests, explaining verdicts); Fulcrum is what makes that safe. This is the weakest judge question, so answer it honestly.
+- **Money:** the stopping boundary works both ways. It blocks fake winners (Settings: p ≈ 0.049 as of 2 Sep, p = 0.067 and z = 1.83 at the end) and lets real winners ship weeks earlier (Onboarding). Adapty takes a share of customer revenue, so wrong test decisions cost Adapty too.
 - **Pitch line:** "A seatbelt for AI agents on your monetization stack."
 - **Demo flow:**
-  1. The agent asks to stop Settings and promote its winner; Fulcrum blocks it and shows the reason.
+  1. Settings **as of 2 Sep** (time travel): a naive agent would ship it; Fulcrum blocks it and shows the reason, then fast-forward to D90 to show the gap vanished. (At the end state even a plain t-test blocks it, so the end state alone proves nothing.)
   2. The agent proposes closing Onboarding; the check passes, a human approves, and Fulcrum runs the CLI stop live.
 - **Key number (compute at the event from the offline CSV):** the week the Onboarding test first crosses the boundary, and the extra revenue from shipping the winner at that week instead of leaving the test running.
 - **Fallback if the kickoff brief changes direction:** Edit-5 Router. Users with 5+ AI edits on day one get an attribute and a segment, with a test on `ai_limit_reached`.
@@ -102,11 +118,17 @@ If the kickoff brief excludes agents or asks for a consumer feature, switch to t
 
 Each phase ends at a stop point. Stop and confirm before starting the next.
 
-1. Adapty CLI wrapper + approval gate + stop on a throwaway test (never Onboarding/Main).
-2. Stats + 3 verdicts.
-3. Agent with Claude tool use.
-4. Hypothesis -> cloned flow variant -> publish -> new test.
-5. Replay with group sequential (O'Brien-Fleming) stopping boundaries.
+1. CLI wrapper, approval gate, stop on a throwaway test (never Onboarding/Main). Target ~13:30.
+2. Stats, boundary, verdicts, `as_of` replay, declared-goal rule. Target ~16:00.
+3. Fulcrum MCP tools wired to the agent, approval page, audit ledger, end-to-end demo flow. Target 18:00.
+4. Optional: the agent finds the next hypothesis (Edit-5 signal) and proposes a new test through Fulcrum.
+5. Polish, README, video, rehearsal.
+
+If a test shows a different number than the spec or `CLAUDE.local.md`, fix the spec and the context file, not the code.
+
+**Independent review:** before key commits, spawn a fresh reviewer subagent that sees only the diff and SPEC.md, not the conversation. It answers: can the agent bypass the gate, can the token leak, is the boundary right. A second fresh subagent re-computes the pitch numbers from the CSV alone. Reviewers never get `.env` or Adapty access. Log each review in AI_LOG.md.
+
+**Automatic checks:** a pre-commit hook blocks secrets and a failing `tsc --noEmit` or failing tests (set it up in phase 1).
 
 If time runs short, drop phases from the end, not from the middle.
 

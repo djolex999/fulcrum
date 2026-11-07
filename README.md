@@ -2,7 +2,7 @@
 
 > **DRAFT.** Written before the Adapty Hackathon Belgrade (7 to 8 Nov 2026) kickoff. Nothing described below is built yet.
 
-A guard layer between AI agents and Adapty: agents can read everything, but every change passes a statistical check and a human approval before Fulcrum executes it.
+AI agents run paywall experiments that make subscription apps more money, without fooling themselves. Fulcrum sits between the agent and Adapty: every change the agent wants passes a statistical check and a human approval before Fulcrum executes it.
 
 ## The problem
 
@@ -23,17 +23,17 @@ The result is shipped "winners" that never actually won.
 
 ## Built with
 
-- Adapty CLI
-- Adapty MCP
+- Adapty CLI (Fulcrum calls Adapty through it)
+- Model Context Protocol (`@modelcontextprotocol/sdk`): Fulcrum is an MCP server for the agent
 - Claude API
-- Next.js
-- Python
+- TypeScript on Node 22, Hono, Vitest
 
 ## Disclosure
 
 - **Pre-event work:** we analyzed the public Lumen demo dataset (`adapty-seed-data-hack`) before the event to understand its shape. No code or data from that analysis is reused in this repository.
 - **Made before kickoff:** a break-time display screen, a draft slide deck, a draft spec (SPEC.md), and the AI log tooling (AI_LOG.md, the `.claude/hooks/ai-log.sh` hook and its test), and a guard hook for the coding agent (`.claude/hooks/guard.sh` and its test).
-- **AI tools:** Claude Code, with custom skills and hooks.
+- **Pre-existing personal tooling**, not part of the project core: Claude Code skills (`phase-checkpoint`, `demo-preflight`), hooks, and Vir (Djordje's own session-distillation CLI).
+- **AI tools:** Claude Code, including fresh reviewer subagents that see only the diff and the spec.
 - **Boilerplate / third-party starters:** none yet. Anything used will be listed here.
 
 ## Data
@@ -44,5 +44,9 @@ Demo and synthetic data only, from the Lumen demo app provided for the hackathon
 
 **Fulcrum**
 
-- Djordje
+- Djordje Marković
 - Milica Petković
+
+## License
+
+MIT, see [LICENSE](LICENSE).
