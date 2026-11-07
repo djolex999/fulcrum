@@ -47,6 +47,7 @@ function parsePlan(raw: unknown, i: number): TestPlan {
   if (names !== undefined && !(Array.isArray(names) && names.length === 2 && names.every((n) => typeof n === "string" && n !== ""))) {
     throw bad(`"${r.title}" adaptyFlowNames needs exactly two names`);
   }
+  if (names !== undefined && names[0] === names[1]) throw bad(`"${r.title}" adaptyFlowNames must be two different names`);
   if (r.goal !== "rpi") throw bad(`"${r.title}" goal must be "rpi"`);
   const h = r.horizonDays;
   if (h !== null && !(typeof h === "number" && Number.isInteger(h) && h > 0)) {

@@ -5,7 +5,7 @@ import type { AbTestDetail } from "../adapty/types.js";
 import { AdaptyCliError } from "../adapty/cli.js";
 import type { createGate, Judge } from "../gate/pending.js";
 import { goalMetricOf, type TestPlan } from "../stats/plans.js";
-import { flowOfArm, planForTitle } from "./engine.js";
+import { checkArmMapping, flowOfArm, planForTitle } from "./engine.js";
 import { ToolError } from "./errors.js";
 
 type Gate = ReturnType<typeof createGate>;
@@ -172,7 +172,10 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
       }
       // With a plan, the requested arm must also map to a CSV flow through its Adapty flow name.
       const plan = planForTitle(plans, test.title);
-      if (plan) flowOfArm(plan, test, a.winner_arm_id);
+      if (plan) {
+        flowOfArm(plan, test, a.winner_arm_id);
+        checkArmMapping(plan, test);
+      }
       const r = await gate.requestStop({
         testId: a.test_id,
         winnerArmId: a.winner_arm_id,
@@ -191,25 +194,27 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
         }
         throw new ToolError("DUPLICATE_PENDING", `action ${r.actionId} is already pending for this test`);
       }
-      // Same shared judge, same data: the numbers behind the decision, so a block shows its boundary.
-      const detail = await judge(a.test_id, { ...(asOf ? { asOf } : {}), metric: a.metric }).catch(() => null);
+      // Evidence comes from the very judge result the gate decided on (one call): it can't contradict the decision.
+      const d = r.detail;
       return {
         action_id: r.actionId,
         status: r.status,
         verdict: r.verdict,
         reason: r.reason,
         ...(r.code ? { code: r.code } : {}),
-        ...(detail
+        ...(d
           ? {
               evidence: {
-                goal_metric: detail.goal_metric,
-                look_k: detail.look_k,
-                K: detail.K,
-                z: detail.z,
-                boundary: detail.boundary,
-                effect: detail.effect,
-                p_naive: detail.p_naive,
-                source: detail.source,
+                verdict: d.verdict,
+                ...(d.code !== undefined ? { code: d.code } : {}),
+                goal_metric: d.goal_metric,
+                look_k: d.look_k,
+                K: d.K,
+                z: d.z,
+                boundary: d.boundary,
+                effect: d.effect,
+                p_naive: d.p_naive,
+                source: d.source,
               },
             }
           : {}),

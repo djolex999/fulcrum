@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -37,6 +37,14 @@ const SET: AbTestDetail = {
     { armId: "fl-settings", name: "Settings - Upgrade" },
   ],
 };
+const DUP: AbTestDetail = {
+  ...ONB,
+  abTestId: "t-dup",
+  arms: [
+    { armId: "fl-w1", name: "Onboarding - Weekly first" },
+    { armId: "fl-w2", name: "Onboarding - Weekly first" },
+  ],
+};
 const ODD: AbTestDetail = {
   ...ONB,
   abTestId: "t-odd",
@@ -56,7 +64,7 @@ let dataset: Dataset | undefined;
 const getData = async (): Promise<Dataset> => (dataset ??= await loadDataset());
 
 async function setup(loadData: () => Promise<Dataset> = getData) {
-  const tests = [ONB, SET, ODD];
+  const tests = [ONB, SET, ODD, DUP];
   const cli = {
     listTests: async () => tests.map(({ arms: _a, ...s }) => s),
     getTest: async (id: string) => {
@@ -134,7 +142,7 @@ describe.skipIf(!real)("real verdicts behind the MCP tools", () => {
   it("request_stop on Onboarding live (no as_of) with the weekly-first arm is pending; with the trial arm it is blocked", async () => {
     const { call } = await setup();
     const win = await call("request_stop", { test_id: "t-onb", winner_arm_id: "fl-weekly", metric: "rpi_60d", rationale: "x" });
-    expect(win.json).toMatchObject({ status: "pending", verdict: "WINNER" });
+    expect(win.json).toMatchObject({ status: "pending", verdict: "WINNER", evidence: { verdict: "WINNER" } });
     const { call: call2 } = await setup();
     const lose = await call2("request_stop", { test_id: "t-onb", winner_arm_id: "fl-trial", metric: "rpi_60d", rationale: "x" });
     expect(lose.json.status).toBe("blocked");
@@ -155,6 +163,7 @@ describe.skipIf(!real)("real verdicts behind the MCP tools", () => {
         { test_id: "t-onb", goal_metric: "rpi_60d", horizon_days: 60 },
         { test_id: "t-set", goal_metric: "rpi_30d", horizon_days: 30 },
         { test_id: "t-odd" },
+        { test_id: "t-dup" },
       ],
     });
   });
@@ -185,6 +194,33 @@ describe("error mapping", () => {
     expect(r.json.code).toBe("UNKNOWN_ARM");
     const j = await call("judge_test", { test_id: "t-odd" });
     expect(j.json.code).toBe("UNKNOWN_ARM");
+  });
+
+  it("duplicate Adapty arm names give UNKNOWN_ARM and never pending", async () => {
+    const { call } = await setup(async () => {
+      throw new Error("data must not be needed");
+    });
+    const r = await call("request_stop", { test_id: "t-dup", winner_arm_id: "fl-w1", metric: "rpi_60d", rationale: "x" });
+    expect(r.isError).toBe(true);
+    expect(r.json.code).toBe("UNKNOWN_ARM");
+    expect(String(r.json.message)).toContain("ambiguous");
+    expect((await call("judge_test", { test_id: "t-dup" })).json.code).toBe("UNKNOWN_ARM");
+  });
+
+  it("duplicate adaptyFlowNames in a plan fail to load", () => {
+    const f = join(dir, "plans.json");
+    writeFileSync(f, JSON.stringify([{ title: "x", arms: ["a", "b"], adaptyFlowNames: ["Same", "Same"], goal: "rpi", horizonDays: 30 }]));
+    expect(() => loadPlans(f)).toThrow(/different names/);
+  });
+
+  it("a judge failure returns blocked with no evidence that could contradict it", async () => {
+    const { call } = await setup(async () => {
+      throw new Error("transient load failure");
+    });
+    const r = await call("request_stop", { test_id: "t-onb", winner_arm_id: "fl-weekly", metric: "rpi_60d", rationale: "x" });
+    expect(r.json.status).toBe("blocked");
+    expect(String(r.json.reason)).toContain("judge failed");
+    expect(r.json.evidence).toBeUndefined();
   });
 
   it("INTERNAL for a stats crash", async () => {

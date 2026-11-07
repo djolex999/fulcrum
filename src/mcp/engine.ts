@@ -24,6 +24,14 @@ export function flowOfArm(plan: TestPlan, test: AbTestDetail, armId: string): st
   return flow;
 }
 
+/** The Adapty-arm to CSV-flow mapping must be a bijection: two arms, distinct flows, covering both plan arms. */
+export function checkArmMapping(plan: TestPlan, test: AbTestDetail): void {
+  const flows = test.arms.map((a) => flowOfArm(plan, test, a.armId));
+  if (test.arms.length !== 2 || new Set(flows).size !== 2 || !plan.arms.every((f) => flows.includes(f))) {
+    throw new ToolError("UNKNOWN_ARM", `arm mapping is ambiguous for test ${test.abTestId}: its arms must map to the plan's two flows exactly once`);
+  }
+}
+
 function armIdOfFlow(plan: TestPlan, test: AbTestDetail, flow: string): string {
   for (const a of test.arms) if (flowOfArm(plan, test, a.armId) === flow) return a.armId;
   throw new ToolError("UNKNOWN_ARM", `no Adapty arm of test ${test.abTestId} maps to flow ${flow}`);
@@ -54,7 +62,7 @@ export function createEngine(deps: {
     const test = await deps.cli.getTest(testId);
     const plan = planForTitle(deps.plans, test.title);
     if (!plan) throw new ToolError("NO_TEST_PLAN", `test "${test.title}" has no entry in test-plans.json, so it cannot be judged`);
-    for (const a of test.arms) flowOfArm(plan, test, a.armId); // every arm must map
+    checkArmMapping(plan, test);
     return { test, plan };
   }
 

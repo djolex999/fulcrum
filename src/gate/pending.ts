@@ -46,6 +46,8 @@ export interface StopRequestResult {
   verdict: string;
   /** Judge code (e.g. BEFORE_HORIZON, METRIC_NOT_GOAL) or DUPLICATE_PENDING. */
   code?: string;
+  /** The judge's full output, when it ran. Absent if the judge failed. */
+  detail?: Record<string, unknown>;
 }
 
 interface Action extends ActionView {
@@ -100,13 +102,17 @@ export function createGate(deps: {
     return true;
   }
 
-  async function runJudge(testId: string, opts: { asOf?: Date; metric?: string }) {
+  async function runJudge(
+    testId: string,
+    opts: { asOf?: Date; metric?: string },
+  ): Promise<Awaited<ReturnType<Judge>> & { detail?: Record<string, unknown> }> {
     try {
-      return await judge(testId, opts);
+      const r = await judge(testId, opts);
+      return { ...r, detail: r as Record<string, unknown> };
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return {
-        verdict: "NO_WINNER" as const,
+        verdict: "NO_WINNER",
         reasons: [`judge failed: ${redactSecrets(msg)}`],
       };
     }
@@ -142,6 +148,7 @@ export function createGate(deps: {
         reason: base.reason,
         verdict: result.verdict,
         ...(result.code !== undefined ? { code: result.code } : {}),
+        ...(result.detail ? { detail: result.detail } : {}),
       };
     }
 
@@ -194,6 +201,7 @@ export function createGate(deps: {
         reason: base.reason,
         verdict: result.verdict,
         ...(result.code !== undefined ? { code: result.code } : {}),
+        ...(result.detail ? { detail: result.detail } : {}),
       };
     } finally {
       reserved.delete(i.testId);
