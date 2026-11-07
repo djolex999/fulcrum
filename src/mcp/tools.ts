@@ -299,7 +299,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   // human. Nothing is created until a human approves; then Fulcrum creates a draft only; a human starts it in Adapty.
   tool(
     "propose_test",
-    "Propose a new A/B test on a placement (Fulcrum only ever creates it as a draft; starting it is a human decision in Adapty): two flow ids (control first, challenger second), the challenger's traffic share in percent, an audience (all or a segment id) and a hypothesis. Fulcrum sets the declared goal itself (60-day revenue per install, rpi_60d, 15 planned looks), so later verdicts judge the test on it. Fulcrum checks policy (allowed placement, max challenger weight, no live test there, daily write limit); a human must approve at the approval page. There is no approve tool. Use placement and flow ids or names from Adapty; blocked replies cite the policy rule, pending ones say to poll request_status.",
+    "Propose a new A/B test on a placement (Fulcrum only ever creates it as a draft; starting it is a human decision in Adapty): two flow ids (control first, challenger second), the challenger's traffic share in percent, an audience (all or a segment id) and a hypothesis. Fulcrum sets the declared goal itself (60-day revenue per install, rpi_60d, 15 planned looks), so later verdicts judge the test on it. Fulcrum checks fulcrum.policy.json (allowed placement, traffic cap, no live test there, daily write limit) and only a policy approver can approve at the approval page. There is no approve tool. Use placement and flow ids or names from Adapty; blocked replies cite the policy rule, pending ones say to poll request_status.",
     {
       placement: z.string().min(1),
       flows: z.tuple([z.string().min(1), z.string().min(1)]),
@@ -346,7 +346,11 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
           r.status === "pending"
             ? `Next: a human must approve at ${approvalUrl}; poll request_status with action_id ${r.actionId}. ${r.reason}`
             : r.reason,
+        ...(r.policyPassed
+          ? { policy_check: { file: "fulcrum.policy.json", passed: r.policyPassed, approvers: r.approvers ?? [] } }
+          : {}),
         ...(r.notes.length > 0 ? { existing_draft: r.notes } : {}),
+        creates: "a draft only: after approval Fulcrum runs ab-tests create once; starting the test stays a human action in Adapty, and Fulcrum has no start tool",
         declared_goal: { metric: GOAL_METRIC, horizon_days: HORIZON_DAYS, K: GOAL_K },
       };
     },

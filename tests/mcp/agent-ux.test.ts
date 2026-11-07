@@ -131,6 +131,12 @@ describe.skipIf(!real)("AGENT-UX every non-success reply names the next step", (
     expect(String(p.json.reason)).toMatch(/^Next: a human must approve at .*127\.0\.0\.1.*poll request_status with action_id /);
     // The agent is told which goal the draft gets, so it doesn't report "no goal metric yet".
     expect(p.json.declared_goal).toEqual({ metric: "rpi_60d", horizon_days: 60, K: 15 });
+    // Policy plus draft: the reply shows the policy file decided, who may approve, and that it is a draft only.
+    const pc = p.json.policy_check as { file: string; passed: string[]; approvers: string[] };
+    expect(pc.file).toBe("fulcrum.policy.json");
+    expect(pc.passed.join(" ")).toMatch(/allowed placement.*traffic cap/);
+    expect(pc.approvers.length).toBeGreaterThan(0);
+    expect(String(p.json.creates)).toMatch(/draft only.*starting the test stays a human action/);
     const pb = await call("propose_test", { placement: "main", flows: ["fl-pro", "fl-3p"], audience: "all", hypothesis: "x" });
     expect(pb.json).toMatchObject({ status: "blocked", policy_rule: "allowed_placements" });
     expect(String(pb.json.reason)).toMatch(/propose the test on an allowed placement/);

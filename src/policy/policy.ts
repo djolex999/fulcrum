@@ -80,7 +80,13 @@ export interface CreateProposal {
 export type PolicyRule = "invalid_policy" | "allowed_placements" | "max_challenger_weight" | "live_test_on_placement" | "daily_write_limit";
 
 export type PolicyResult =
-  | { ok: true; /** Things the human and the agent should know that do not block, e.g. an existing draft. */ notes: string[] }
+  | {
+      ok: true;
+      /** Things the human and the agent should know that do not block, e.g. an existing draft. */
+      notes: string[];
+      /** The rules this proposal passed, in plain words, so the reply shows that policy decided. */
+      passed: string[];
+    }
   | { ok: false; rule: PolicyRule; reason: string };
 
 export function checkCreate(policy: Policy, p: CreateProposal, liveTests: readonly AbTestSummary[]): PolicyResult {
@@ -118,5 +124,11 @@ export function checkCreate(policy: Policy, p: CreateProposal, liveTests: readon
   const notes = here
     .filter((t) => t.state === "draft")
     .map((t) => `a draft test '${t.title}' already exists on this placement; this proposal does not touch it`);
-  return { ok: true, notes };
+  const passed = [
+    `allowed placement: ${p.placementDeveloperId} is in allowedPlacements`,
+    `traffic cap: challenger weight ${p.challengerWeight}% is within maxChallengerWeight ${policy.maxChallengerWeight}%`,
+    "no live test on this placement",
+    `daily write limit: ${p.writesToday} of ${policy.dailyWriteLimit} used today`,
+  ];
+  return { ok: true, notes, passed };
 }

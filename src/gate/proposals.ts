@@ -63,6 +63,9 @@ export interface ProposalResult {
   code?: string;
   /** Things that do not block but matter, e.g. an existing draft on the placement. */
   notes: string[];
+  /** When pending: the policy rules it passed and who may approve it (from fulcrum.policy.json). */
+  policyPassed?: string[];
+  approvers?: string[];
 }
 
 interface Proposal extends ProposalView {
@@ -185,6 +188,7 @@ export function createProposals(deps: {
     reserved.set(key, id); // synchronous, before the first await
     try {
       let notes: string[] = [];
+      let passed: string[] | undefined;
       try {
         const r = checkCreate(
           policy,
@@ -194,6 +198,7 @@ export function createProposals(deps: {
         if (r.ok) {
           p.status = "pending";
           notes = r.notes;
+          passed = r.passed;
           p.reason = [...r.notes, DRAFT_NOTE].join("; ");
         } else {
           p.reason = r.reason;
@@ -213,6 +218,7 @@ export function createProposals(deps: {
         reason: p.reason,
         ...(p.policyRule !== undefined ? { policyRule: p.policyRule } : {}),
         notes,
+        ...(p.status === "pending" && passed ? { policyPassed: passed, approvers: [...policy.approvers] } : {}),
       };
     } finally {
       reserved.delete(key);
