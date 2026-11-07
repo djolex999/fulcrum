@@ -20,8 +20,8 @@ The refusals are the point of the demo, not the approval button. Steps 1 to 4 ar
    Expect: week 2 (19 Jul) `CONTINUE` / `BEFORE_HORIZON`: the goal is 60-day revenue per install and no user has 60 days yet; next valid look 6 Sep. Week 9 (6 Sep): `WINNER`, z 4.34 against 2.71, winner `onb_weekly`. The presenter adds the money: shipping at week 9 is worth about $19k on this app (`npm run demo:story`; not a tool output).
 5. **Only now: approval and the live stop.** Prompt: "Close Onboarding and ship the winner." (Staging: this request is sent about 2 minutes before going on stage, so the card is already waiting; on stage, ask `request_status` for it.)
    Expect: `request_stop` returns `pending`. The human approves on the approval page; the agent cannot. Fulcrum stops the test in Adapty; show `adapty ab-tests get <id> --app … --json` on the second screen.
-6. **The next test.** Prompt: "Users keep hitting ai_limit_reached; find what drives payment and propose a test."
-   Expect: `find_signals` (users with 5+ AI edits on day one pay about twice as often), then `propose_test` on `ai_limit_reached`: policy check, `pending`. After approval Fulcrum creates it as a draft; starting it stays a human action in Adapty.
+6. **The next test: policy plus draft.** Prompt: "Users keep hitting ai_limit_reached; find what drives payment and propose a test."
+   Expect: `find_signals` (users with 5+ AI edits on day one pay about twice as often), then `propose_test` on `ai_limit_reached` comes back `pending` with `policy_check` (fulcrum.policy.json: allowed placement, traffic cap, no live test, daily limit; the approvers), `existing_draft` (the draft "AI limit: Pro vs 3 plans" on that placement), `creates` (draft only) and the declared goal. Line: "The agent can propose, but policy decides what it may propose, and it can never start a test."
 
 ## Red-team beat (optional, or the opening of Q&A)
 

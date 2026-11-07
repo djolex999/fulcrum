@@ -1,6 +1,6 @@
 # Fulcrum
 
-> **Status (Sat 7 Nov, evening):** built and tested (188 tests, `npm test`): the MCP server and the only door (no tool, no CLI, no token for the agent), the approval gate and ledger, the human-only approval page, the verdict engine (declared goal, horizon, sequential boundary, `as_of` replay, metric-shopping refusal), and the closed loop: `find_signals` and `propose_test`, which after human approval creates a new test as a draft (starting it stays a human action in Adapty), under `fulcrum.policy.json`. `npm run demo:story` prints the evidence; `npm run test:attacks` runs the bypass and abuse tests.
+> **Status (Sat 7 Nov, evening):** built and tested (194 tests, `npm test`): the MCP server and the only door (no tool, no CLI, no token for the agent), the approval gate and ledger, the human-only approval page, the verdict engine (declared goal, horizon, sequential boundary, `as_of` replay, metric-shopping refusal), and the closed loop: `find_signals` and `propose_test`, which after human approval creates a new test as a draft (starting it stays a human action in Adapty), under `fulcrum.policy.json`. `npm run demo:story` prints the evidence; `npm run test:attacks` runs the bypass and abuse tests.
 
 Fulcrum is the only door between AI agents and an Adapty account. There is no tool, no CLI and no token for the agent: its only path to a write is Fulcrum. Agents can read test data; every change passes the test's declared goal, a sequential stopping boundary and a human approval, and only then does Fulcrum execute it.
 
@@ -20,8 +20,22 @@ The result is shipped "winners" that never actually won.
 
 - **Approval gate:** the agent has no token, it only has requests. A request becomes pending only if the statistics say there is a winner for that exact arm, and only a human clicking Approve on the local page makes Fulcrum stop the test. Adapty's own MCP asks the model to confirm before a stop, which is just a prompt; Fulcrum adds the rule in code, plus statistics, a human approver and a ledger of every attempt.
 - **Verdict engine:** a test is judged only on its declared goal. For Onboarding that is 60-day revenue per install, so until users have been in the app for 60 days the answer is always "not yet"; the first week anyone qualifies is week 9, and that is where it crosses the boundary.
-- **Agent loop:** the agent reads tests and asks for verdicts through Fulcrum's tools; every reply ends with the next step. It can also find a signal in the data (`find_signals`: users with 5+ AI edits on day one pay about twice as often) and propose a new test through the same door (`propose_test`): policy check, human approval, then Fulcrum creates a draft.
+- **Agent loop:** the agent reads tests and asks for verdicts through Fulcrum's tools; every reply ends with the next step. It can also find a signal in the data (`find_signals`: users with 5+ AI edits on day one pay about twice as often) and propose a new test through the same door (`propose_test`).
+- **Policy plus draft:** the agent can propose, but policy decides what it may propose, and it can never start a test. Every proposal is checked against `fulcrum.policy.json` (allowed placements, a traffic cap on the challenger, no live test on the placement, a daily write limit), and only a listed approver can approve it. The reply shows the rules it passed, who may approve, and any existing draft on the placement (on `ai_limit_reached`, "AI limit: Pro vs 3 plans"). After approval Fulcrum creates the test once, **as a draft**; starting it stays a human action in Adapty, and Fulcrum has no start tool.
 - **Stopping boundary:** at look k of K planned weekly looks, a test may stop only if |z| on its declared goal exceeds c × √(K/k). Early looks need overwhelming evidence; the bar falls to c at the last look. c = 2.1 for K = 15 is calibrated by simulating A/A tests (no real difference): weekly peeking at p < 0.05 calls a false winner about 22% of the time; the boundary, about 5%. K and the horizon come from the test plan (`test-plans.json`), with a visible fallback.
+
+## The demo, in order
+
+The refusals are the point, not the approval button: four "no" or "not yet" answers come before the one write.
+
+1. **No direct path.** `/mcp` lists only Fulcrum; the agent's `adapty ab-tests stop` in Bash is denied.
+2. **Settings, replayed as of 16 Aug 2026: blocked by the boundary.** On its declared goal (30-day revenue per install) naive p was 0.045, just under 0.05, so a weekly-peeking agent would have shipped it; z was 2.00 against a boundary of 3.32. By the end the other arm leads.
+3. **Payer rate instead: refused** as metric shopping. Only the declared goal can be judged.
+4. **Onboarding replay:** week 2 "not yet" (no user has 60 days), week 9 "now" (z 4.34 against 2.71). Shipping at week 9 is worth about $19k on this synthetic app.
+5. **Only then approval and the live stop.** A human approves on the local page and Fulcrum stops the test in Adapty.
+6. **The next test.** The agent finds the 5+ AI edits signal and proposes a test on `ai_limit_reached`: policy check, approval, draft only.
+
+The prompts are in [demo/PROMPTS.md](demo/PROMPTS.md).
 
 ## Architecture
 
@@ -48,8 +62,8 @@ npm ci && npm run demo:story
 
 Prints the whole story offline from the synthetic data, with no Adapty access and no token: the Settings peeking trap, the 22% vs 5% simulation, and the Onboarding "not yet, then now" timeline. It reads the public Lumen dataset from `~/Projects/adapty-seed-data-hack/data/offline` (clone [kpotehin/adapty-seed-data-hack](https://github.com/kpotehin/adapty-seed-data-hack) into `~/Projects`).
 
-- `npm test` runs all 188 tests; `npm run test:attacks` runs the bypass and abuse suite.
-- To run the agent: put `ADAPTY_TOKEN` in `.env` (see `.env.example`), then `cd demo && claude`. Fulcrum is the agent's only MCP server and reads the token from the repo's `.env` itself; the agent never sees it.
+- `npm test` runs all 194 tests; `npm run test:attacks` runs the bypass and abuse suite.
+- To run the agent: put `ADAPTY_TOKEN` in `.env` (see `.env.example`), then `cd demo && CLAUDE_CONFIG_DIR="$HOME/.claude-fulcrum-demo" claude` (a clean config, so the agent sees none of your own skills or instructions). Fulcrum is the agent's only MCP server and reads the token from the repo's `.env` itself; the agent never sees it.
 
 ## Limitations
 
