@@ -6,6 +6,8 @@
 
 Safety is what lets an agent be trusted to make that money. Fulcrum is the only door between AI agents and an Adapty account. There is no tool, no CLI and no token for the agent: its only path to a write is Fulcrum. Agents can read test data; every change passes the test's declared goal, a sequential stopping boundary and a human approval, and only then does Fulcrum execute it.
 
+**How we built it with AI:** spec, then tests, then code, with reviewer subagents and an independent recomputation of every number. See [AI_LOG.md: How we built it](AI_LOG.md#how-we-built-it).
+
 **Landing page:** [djolex999.github.io/fulcrum-site](https://djolex999.github.io/fulcrum-site/), the one-page overview with the three demo moments ([source](https://github.com/djolex999/fulcrum-site)).
 
 ## The problem
