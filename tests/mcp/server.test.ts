@@ -48,7 +48,7 @@ afterEach(() => {
 
 const winnerJudge: Judge = async () => ({ verdict: "WINNER", winnerArmId: "arm-a", reasons: ["clear win"] });
 
-async function setup(judge: Judge = placeholderJudge) {
+async function setup(judge: Judge = placeholderJudge, labels?: Map<string, { testTitle: string; armName: string }>) {
   const ledger = createLedger(ledgerPath);
   const fakeCli = {
     listTests: async () => {
@@ -74,6 +74,7 @@ async function setup(judge: Judge = placeholderJudge) {
     timeline: placeholderTimeline,
     log,
     scrub,
+    ...(labels ? { labels } : {}),
   });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test", version: "0" });
@@ -157,6 +158,17 @@ describe("Fulcrum MCP server", () => {
       expect(r.isError).toBe(true);
       expect(r.json.code).toBe("UNKNOWN_TEST");
     }
+  });
+
+  it("the approval label names the stored arm and a duplicate request cannot overwrite it", async () => {
+    const labels = new Map<string, { testTitle: string; armName: string }>();
+    const { call } = await setup(winnerJudge, labels);
+    const first = await call("request_stop", { test_id: "t-live", winner_arm_id: "arm-a", metric: "rpi", rationale: "x" });
+    expect(first.json.status).toBe("pending");
+    expect(labels.get(String(first.json.action_id))).toEqual({ testTitle: "Live test", armName: "A" });
+    await call("request_stop", { test_id: "t-live", winner_arm_id: "arm-b", metric: "rpi", rationale: "y" });
+    expect(labels.size).toBe(1);
+    expect(labels.get(String(first.json.action_id))).toEqual({ testTitle: "Live test", armName: "A" });
   });
 
   it("request_stop on a completed test returns NOT_LIVE", async () => {

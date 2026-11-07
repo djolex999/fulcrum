@@ -223,9 +223,14 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
         rationale: a.rationale,
         ...(asOf ? { asOf } : {}),
       });
-      if (r.status === "pending") {
-        const armName = test.arms.find((arm) => arm.armId === a.winner_arm_id)?.name ?? "";
-        deps.labels?.set(r.actionId, { testTitle: test.title, armName });
+      // Label only a NEW pending action, never overwrite one, and name the arm the gate stored (what Approve
+      // will stop), not the arm in this request: a duplicate request returns the existing action's id.
+      if (r.status === "pending" && r.code !== "DUPLICATE_PENDING" && deps.labels && !deps.labels.has(r.actionId)) {
+        const stored = gate.status(r.actionId);
+        if (stored.testId === test.abTestId) {
+          const armName = test.arms.find((arm) => arm.armId === stored.winnerArmId)?.name ?? "";
+          deps.labels.set(r.actionId, { testTitle: test.title, armName });
+        }
       }
       // Two cases. verdict UNKNOWN: the first request is still being judged, so say "retry in a moment".
       // Otherwise a stop for this test is already waiting for a human, which is an error.
