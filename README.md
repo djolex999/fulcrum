@@ -2,7 +2,9 @@
 
 > **Status (Sat 7 Nov, evening):** built and tested (194 tests, `npm test`): the MCP server and the only door (no tool, no CLI, no token for the agent), the approval gate and ledger, the human-only approval page, the verdict engine (declared goal, horizon, sequential boundary, `as_of` replay, metric-shopping refusal), and the closed loop: `find_signals` and `propose_test`, which after human approval creates a new test as a draft (starting it stays a human action in Adapty), under `fulcrum.policy.json`. `npm run demo:story` prints the evidence; `npm run test:attacks` runs the bypass and abuse tests.
 
-Fulcrum is the only door between AI agents and an Adapty account. There is no tool, no CLI and no token for the agent: its only path to a write is Fulcrum. Agents can read test data; every change passes the test's declared goal, a sequential stopping boundary and a human approval, and only then does Fulcrum execute it.
+**Agents peek, and peeking costs money both ways.** On the hackathon's synthetic Lumen app, a weekly-peeking agent would have shipped the wrong paywall on 16 Aug (naive p 0.045, just under 0.05, while z was 2.00 against a stopping boundary of 3.32; by the end the other arm leads), and left a real winner worth about $19k running weeks too long (Onboarding clears the boundary at week 9). Fulcrum fixes both: it blocks fake winners and releases real ones at the first valid look. All numbers are `export_csv` (synthetic data), reproduced by `npm run demo:story`.
+
+Safety is what lets an agent be trusted to make that money. Fulcrum is the only door between AI agents and an Adapty account. There is no tool, no CLI and no token for the agent: its only path to a write is Fulcrum. Agents can read test data; every change passes the test's declared goal, a sequential stopping boundary and a human approval, and only then does Fulcrum execute it.
 
 **Landing page:** [djolex999.github.io/fulcrum-site](https://djolex999.github.io/fulcrum-site/), the one-page overview with the three demo moments ([source](https://github.com/djolex999/fulcrum-site)).
 

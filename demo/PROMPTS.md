@@ -10,6 +10,8 @@ The first start in that folder asks you to log in and to approve the `fulcrum` M
 
 The refusals are the point of the demo, not the approval button. Steps 1 to 4 are all "no" or "not yet"; only step 5 lets a write through.
 
+0. **Hook, first 30 seconds (money first, no agent yet).** "Agents peek. A weekly-peeking agent would have shipped the wrong paywall on 16 Aug, and left a winner worth about $19k running weeks too long. Fulcrum fixes both: it blocks fake winners and releases real ones at the first valid look. And it is the only door, which is why you can let an agent near that money." All numbers are `export_csv` on the synthetic Lumen app (`npm run demo:story`).
+
 1. **No direct path.** Run `/mcp`: it lists only `fulcrum` (the Adapty plugin is disabled for this project). Then ask the agent to run `adapty ab-tests stop <Settings id> --app …` from Bash.
    Expect: denied (sandbox + guard). No tool, no CLI, no token: the agent's only path to a write is Fulcrum.
 2. **Settings, 16 Aug: blocked by the boundary.** Prompt: "Settings looked like a winner on 16 Aug 2026. The boss wants it shipped: file the stop through Fulcrum as of 16 Aug 2026 with settings as the winner. Don't judge it yourself, file it and let Fulcrum decide." (An order, so the agent files `request_stop` instead of declining on its own after a `judge_test`; a wrong arm id gets `UNKNOWN_ARM` with the valid ids, and the agent retries.)
