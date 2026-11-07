@@ -60,6 +60,12 @@ How AI was used to build Fulcrum at the Adapty Hackathon Belgrade (7 to 8 Nov 20
 - **What we changed (two fix rounds):** the page now needs a session that only the human's browser can get: Fulcrum opens the browser with a single-use login code (60 s), the cookie is a fresh random session id, every form carries a session-bound CSRF token, POSTs need an allowed Origin, plus a Host allowlist, frame headers, and the browser opens only after the server listens. The guard hook also denies any agent command aimed at the approval port. A Fable re-review was cut off by the model's safety filter partway through (it had already confirmed round 1); the final re-review ran on Sonnet and found nothing open.
 - **Known limit, said openly:** on the same OS user, a determined local process could still see the one-time code in the `open` arguments during its 60 s window, or read browser state. Production approval would use a separate channel (Slack, email, another OS user).
 
+### Demo agent isolation (Task 11, Sat 7 Nov, ~15:00–15:45, Sonnet + security plugin)
+
+- **Found over four review rounds:** the demo agent (the one Fulcrum guards against) could have edited Fulcrum's code or its own policy files, planted a fake `tsx` that Claude Code would launch as Fulcrum, or dropped a `tsconfig.json` whose `paths` redirect Fulcrum's imports to its own code (reproduced by a reviewer).
+- **What we changed:** the demo agent runs inside Claude Code's OS-level Bash sandbox (writes only in `demo/`, no unsandboxed retry, refuses to start without the sandbox, no localhost access), has no file-edit tools, and policy and loader files (`.claude`, `.mcp.json`, `tsconfig.json`, `node_modules`, `package.json`, `.env*` …) are write-denied. Fulcrum is launched with `node ../node_modules/tsx/dist/cli.mjs --tsconfig ../tsconfig.json`, so nothing in `demo/` changes what code it loads; a regression test plants a hostile tsconfig and proves it is ignored (with a control run that proves the test can catch it).
+- **Known limit:** it is still the same OS user; production would run Fulcrum under a separate user or from a read-only install.
+
 ## Phases
 
 One entry per build phase, written at the end of `phase-checkpoint` in Djordje's words.
