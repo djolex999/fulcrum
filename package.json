@@ -1,0 +1,26 @@
+{
+  "name": "fulcrum",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "start": "tsx src/mcp/server.ts"
+  },
+  "dependencies": {
+    "@hono/node-server": "^2.1.6",
+    "@modelcontextprotocol/sdk": "^1.32.2",
+    "hono": "^4.13.17",
+    "zod": "^4.6.7"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.6",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.1.0"
+  }
+}

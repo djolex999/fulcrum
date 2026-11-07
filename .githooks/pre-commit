@@ -1,0 +1,2 @@
+#!/bin/sh
+npx tsx scripts/scan-staged.ts && npm run typecheck && npm test
