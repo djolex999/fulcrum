@@ -194,7 +194,9 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     async (a) => {
       const asOf = parseAsOf(a.as_of);
       const test = await resolveTest(a.test_id);
-      if (test.state !== "live") {
+      // A replay (as_of) asks "what would the verdict have been then"; the gate never makes it pending or
+      // executes it, so it is allowed on a test that has since ended. A real stop needs a live test.
+      if (!asOf && test.state !== "live") {
         throw new ToolError("NOT_LIVE", `test ${a.test_id} is ${test.state}, only live tests can be stopped`);
       }
       if (!test.arms.some((arm) => arm.armId === a.winner_arm_id)) {

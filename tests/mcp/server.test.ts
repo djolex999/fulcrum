@@ -166,6 +166,16 @@ describe("Fulcrum MCP server", () => {
     expect(r.json.code).toBe("NOT_LIVE");
   });
 
+  it("request_stop replay (as_of) on a completed test is judged, blocked as replay only, never pending", async () => {
+    const { call } = await setup(winnerJudge);
+    const r = await call("request_stop", { test_id: "t-done", winner_arm_id: "arm-a", metric: "rpi", rationale: "x", as_of: "2026-08-16" });
+    expect(r.isError).toBeFalsy();
+    expect(r.json.status).toBe("blocked");
+    expect(String(r.json.reason)).toContain("replay only");
+    const s = await call("request_status", { action_id: r.json.action_id });
+    expect(s.json.status).toBe("blocked");
+  });
+
   it("request_stop with an arm id not in the test returns UNKNOWN_ARM", async () => {
     const { call } = await setup(winnerJudge);
     const r = await call("request_stop", { test_id: "t-live", winner_arm_id: "arm-zzz", metric: "rpi", rationale: "x" });
