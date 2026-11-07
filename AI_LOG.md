@@ -54,6 +54,12 @@ How AI was used to build Fulcrum at the Adapty Hackathon Belgrade (7 to 8 Nov 20
 - **Who:** a fresh Fable subagent with only the task brief, the diff and SPEC.md, asked whether the agent can bypass the gate through the server, whether the token can leak, whether stdout stays clean, and whether SPEC.md matches the code.
 - **Found:** no bypass (the server only gets the CLI's read methods at the type level; five tools, no approve tool, verified over real stdio), no leak (one scrub path for results, errors and logs; a smoke run with a fake token showed it nowhere), stdout carries only JSON-RPC. Approved with minor findings: error labelling for stats crashes, the wording of the in-progress result, sharing one judge between the gate and the tools. These are carried into the next wiring task.
 
+### Approval page reviews (Task 10, Sat 7 Nov, ~14:30–15:00, Sonnet + Fable + security plugin)
+
+- **Found:** the first version stopped browsers from approving, but **not the agent itself**: an agent with Bash could approve its own request with `curl` (no Origin header). The automated security review rated it high; the Sonnet review agreed. Later rounds found the login link was reusable and equal to the cookie value, cookies are sent to every localhost port, and the guard regex missed loopback variants.
+- **What we changed (two fix rounds):** the page now needs a session that only the human's browser can get: Fulcrum opens the browser with a single-use login code (60 s), the cookie is a fresh random session id, every form carries a session-bound CSRF token, POSTs need an allowed Origin, plus a Host allowlist, frame headers, and the browser opens only after the server listens. The guard hook also denies any agent command aimed at the approval port. A Fable re-review was cut off by the model's safety filter partway through (it had already confirmed round 1); the final re-review ran on Sonnet and found nothing open.
+- **Known limit, said openly:** on the same OS user, a determined local process could still see the one-time code in the `open` arguments during its 60 s window, or read browser state. Production approval would use a separate channel (Slack, email, another OS user).
+
 ## Phases
 
 One entry per build phase, written at the end of `phase-checkpoint` in Djordje's words.
