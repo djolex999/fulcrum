@@ -23,6 +23,18 @@ grep -q '\[REDACTED\]' <<<"$line"; check "secrets are replaced with [REDACTED]" 
 python3 -c 'import json,sys; d=json.loads(sys.argv[1]); assert set(d)=={"ts","tool","target","success"} and d["tool"]=="Bash" and d["success"] is True and len(d["target"])<=120 and d["ts"].endswith(("+01:00","+02:00"))' "$line" 2>/dev/null
 check "line has ts (Belgrade), tool, target <= 120 chars, success" $?
 
+# 1b. Broader secret shapes from the security review
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"curl -H \"Authorization: Bearer abcTOKEN999\" https://u:hunter2pw@x.io"},"tool_response":{}}' | "$HOOK"
+line="$(tail -1 "$LOG")"
+! grep -qE 'abcTOKEN999|hunter2pw' <<<"$line"; check "Bearer header and URL credentials are redacted" $?
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"MY_SECRET=s3cr3tv4lue x --password pw1234 && echo Zx9kQ2mP7vL4nR8tW1yB6cD3fG5hJ0sA"},"tool_response":{}}' | "$HOOK"
+line="$(tail -1 "$LOG")"
+! grep -qE 's3cr3tv4lue|pw1234|Zx9kQ2mP7vL4nR8tW1yB6cD3fG5hJ0sA' <<<"$line"; check "NAME=value, --password and long random strings are redacted" $?
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"adapty ab-tests list --app f8711513-c780-42b2-b6da-6c44094f3867"},"tool_response":{}}' | "$HOOK"
+line="$(tail -1 "$LOG")"
+grep -q 'f8711513-c780-42b2-b6da-6c44094f3867' <<<"$line"; check "UUIDs (app ids) are kept" $?
+[ "$(stat -f %Lp "$LOG" 2>/dev/null || stat -c %a "$LOG")" = 600 ]; check "log file is mode 600" $?
+
 # 2. Write event: log the path only, never the content
 printf '%s' '{"tool_name":"Write","tool_input":{"file_path":"/repo/notes.md","content":"PRIVATE BODY secret_live_abc"},"tool_response":{"success":true}}' | "$HOOK"
 line="$(tail -1 "$LOG")"
