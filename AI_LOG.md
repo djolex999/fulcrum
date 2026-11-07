@@ -50,71 +50,22 @@ Shortened paraphrases of the briefs; the point is what each one withholds or nar
 
 ## Independent reviews
 
-### Cross-check 1: pitch numbers from raw data (Sat 7 Nov, ~12:05)
+Every reviewer was a fresh Claude subagent that saw only what is listed (never the conversation, the secrets file or Adapty access). Detailed reports are kept locally.
 
-- **Who:** a fresh Claude subagent with no project context. It could read only the offline CSVs and `flows/*.json` of the public Lumen dataset; it was told not to read this repo, the spec or our notes, and got none of our numbers. It ran nothing from the dataset repo. Its report is kept locally.
-- **Method (its own):** arm = `flow` within `ab_test`; RPI = net revenue (refunds subtracted at refund time) within D days of install over all installs, only users with the full D days; Welch test on per-user values; looks every 7 days from the first install, K = 15, boundary 2.1 × sqrt(15/k).
-- **Agrees:**
-  - Onboarding first crosses the boundary at **week 9** (z ≈ −4.5 against 2.71); weekly-first wins.
-  - Settings at the end: difference **$1.57**, **p = 0.067**, the other arm leads.
-- **Roughly agrees:** extra revenue from shipping Onboarding at week 9 is **≈ $19.4k** by its age-curve method (our estimate: ≈ $21k). The simple "users × D60 gap" approximation gives ≈ $27k, which overstates it.
-- **Differs:**
-  - Settings **as of 2026-09-02**: it finds −$1.37, **p = 0.26** on revenue to date (and the leader flips at a fixed 30-day horizon, p = 0.56). Our estimate was +$2.48, p ≈ 0.049. **Unresolved:** the result depends on the RPI definition and horizon. The implementation must reproduce a stated definition before this goes in the demo.
-  - Onboarding RPI gap: ≈ $4.05 at D60 (our note said +$3.63 without a horizon).
-- **Action:** pitch numbers stay [estimate] until the implementation's AC-1/AC-2 tests produce them; use "≈ $20k" until then.
+| When (Sat) | Reviewer | Saw / asked | Found | What changed |
+|---|---|---|---|---|
+| ~12:05 | subagent, raw CSV only, none of our numbers | re-compute the pitch numbers | Onboarding week 9 and the Settings end state agree; extra revenue ≈ $19.4k by an age-curve method; "Settings as of 2 Sep" does not hold (p 0.26) | 2 Sep scene dropped; money re-estimated (≈ $19k) |
+| ~12:25 | Fable, raw CSV only | Settings, every weekly look, five metrics | one naive-significant `settings` lead (16 Aug, 30-day RPI, fragile); the boundary never crossed; `main_lifetime` leads at the end | demo rebuilt around 16 Aug and Onboarding "not yet, then now" |
+| ~12:40 | Sonnet, design doc only | what is missing before a plan | 8 open questions (contracts, cutoffs, calibration, approval security, …) | all 8 answered in the [demo design](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md) |
+| ~13:40 | Fable + security plugin | approval gate diff + gate invariants | duplicate pending actions under concurrency; approvable before the ledger write; judge codes lost | slot reserved before any await, ledger first, codes passed through |
+| ~14:20 | Fable | MCP server diff + SPEC.md | no bypass, no token leak, clean stdout | minor findings carried into wiring |
+| ~14:30–15:00 | Sonnet + Fable + security plugin | approval page | **the agent could approve its own request with `curl`**; reusable login link; cookies shared across localhost ports | single-use login code, random session cookie, CSRF, Origin and Host checks; guard denies the approval port |
+| ~15:00–15:45 | Sonnet + security plugin (4 rounds) | demo agent isolation | the agent could edit Fulcrum or its policy files, plant a fake `tsx`, or redirect imports with a hostile `tsconfig.json` | OS sandbox, write-denied policy and loader files, pinned loader, regression test |
+| ~16:00–17:00 | Sonnet + Fable | verdict engine | looks anchored on time of day (16 Aug hit the wrong look); unlabelled end views; a SPEC p-value on the wrong metric | day-aligned looks (week 9 z 4.49 → 4.34, same verdict), labels, SPEC fixed (the spec moved, not the tolerance) |
+| ~17:30 | Fable + Sonnet | real verdicts behind the tools | duplicate arm names could map to one flow; evidence from a second judge call | one-to-one arm mapping; one judge call is both decision and evidence |
+| ~17:00–18:10 | Fable + Sonnet + security plugin | closed loop, attack suite, demo safety | live-test rule compared titles; backup script did not pass its port | match by placement id (fails closed); backup forwards only its port |
 
-### Cross-check 2: the Settings timeline (Sat 7 Nov, ~12:25, Fable)
-
-- **Who:** a fresh subagent on Fable with the same isolation as cross-check 1. It was told only that Adapty shows Settings as completed with `settings` declared the winner.
-- **Asked:** at every weekly look and on five metrics (revenue to date, 7/14/30-day RPI, payer rate), did `settings` ever lead with naive p < 0.05, and was the boundary ever crossed?
-- **Found:** exactly one naive-significant `settings` lead, 16 Aug on 30-day RPI (p ≈ 0.044, boundary 3.3 to 3.5, not crossed). It is fragile (permutation p = 0.052, below 0.05 on 2 of 27 days). The boundary was **never crossed for `settings`**; at the end `main_lifetime` leads on all five metrics, decisively on payer rate (24.4% vs 17.1%). The arms also sell different products, so it is not a clean anchor test.
-- **What we changed because of it:** we dropped the "Settings as of 2 Sep" demo centerpiece. Settings is now "the mistake already in the dashboard" (robust end state and full timeline), and the "not yet, then now" moment moved to Onboarding. See the [demo design](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md).
-
-### Builder check of the demo design (Sat 7 Nov, ~12:40, Sonnet)
-
-- **Who:** a fresh subagent on Sonnet that read only the design document and was asked what it would still need before it could plan the build.
-- **Found:** 8 questions: contracts, data and CLI shape, the week 2 and week 9 cutoffs, calibration, approval security, the Settings "promote" wording, the pre-commit hook, and what is optional.
-- **What we changed:** we answered all 8 in the design doc. Four were decided as marked calls: the live stop is judged on the CSV, c is precomputed by simulation, the Settings goal is revenue per install to date, and the approval page re-checks the verdict when someone approves and executes at most once. Nothing needed a new decision from Djordje before planning.
-
-### Gate review (Task 3, Sat 7 Nov, ~13:40, Fable + security plugin)
-
-- **Who:** a fresh Fable subagent that saw only the task brief, the diff and SPEC.md's gate invariants, asked three questions: can the agent bypass the gate, can a secret leak, is the ledger append-only. An automated security review of the commit ran in parallel.
-- **Found:** no bypass (`stopTest` has one call site, after a named human approval; concurrent approvals execute once), no leak (every stored reason redacted). Three Important issues: concurrent requests for one test could create two pending actions (both reviewers found it; Fable reproduced it with two stops), the action became approvable before its ledger entry was written, and the judge's codes (`BEFORE_HORIZON`, `METRIC_NOT_GOAL`) never reached `request_stop`.
-- **What we changed:** the test slot is reserved before any await, the ledger is written first, and `request_stop` carries the judge's verdict and code (SPEC.md overruled the plan's wording). A Fable re-review confirmed all three fixed; the remaining observations are logged as known limits for the final review.
-
-### MCP server review (Task 9, Sat 7 Nov, ~14:20, Fable)
-
-- **Who:** a fresh Fable subagent with only the task brief, the diff and SPEC.md, asked whether the agent can bypass the gate through the server, whether the token can leak, whether stdout stays clean, and whether SPEC.md matches the code.
-- **Found:** no bypass (the server only gets the CLI's read methods at the type level; five tools, no approve tool, verified over real stdio), no leak (one scrub path for results, errors and logs; a smoke run with a fake token showed it nowhere), stdout carries only JSON-RPC. Approved with minor findings: error labelling for stats crashes, the wording of the in-progress result, sharing one judge between the gate and the tools. These are carried into the next wiring task.
-
-### Approval page reviews (Task 10, Sat 7 Nov, ~14:30–15:00, Sonnet + Fable + security plugin)
-
-- **Found:** the first version stopped browsers from approving, but **not the agent itself**: an agent with Bash could approve its own request with `curl` (no Origin header). The automated security review rated it high; the Sonnet review agreed. Later rounds found the login link was reusable and equal to the cookie value, cookies are sent to every localhost port, and the guard regex missed loopback variants.
-- **What we changed (two fix rounds):** the page now needs a session that only the human's browser can get: Fulcrum opens the browser with a single-use login code (60 s), the cookie is a fresh random session id, every form carries a session-bound CSRF token, POSTs need an allowed Origin, plus a Host allowlist, frame headers, and the browser opens only after the server listens. The guard hook also denies any agent command aimed at the approval port. A Fable re-review was cut off by the model's safety filter partway through (it had already confirmed round 1); the final re-review ran on Sonnet and found nothing open.
-- **Known limit, said openly:** on the same OS user, a determined local process could still see the one-time code in the `open` arguments during its 60 s window, or read browser state. Production approval would use a separate channel (Slack, email, another OS user).
-
-### Demo agent isolation (Task 11, Sat 7 Nov, ~15:00–15:45, Sonnet + security plugin)
-
-- **Found over four review rounds:** the demo agent (the one Fulcrum guards against) could have edited Fulcrum's code or its own policy files, planted a fake `tsx` that Claude Code would launch as Fulcrum, or dropped a `tsconfig.json` whose `paths` redirect Fulcrum's imports to its own code (reproduced by a reviewer).
-- **What we changed:** the demo agent runs inside Claude Code's OS-level Bash sandbox (writes only in `demo/`, no unsandboxed retry, refuses to start without the sandbox, no localhost access), has no file-edit tools, and policy and loader files (`.claude`, `.mcp.json`, `tsconfig.json`, `node_modules`, `package.json`, `.env*` …) are write-denied. Fulcrum is launched with `node ../node_modules/tsx/dist/cli.mjs --tsconfig ../tsconfig.json`, so nothing in `demo/` changes what code it loads; a regression test plants a hostile tsconfig and proves it is ignored (with a control run that proves the test can catch it).
-- **Known limit:** it is still the same OS user; production would run Fulcrum under a separate user or from a read-only install.
-
-### Verdict engine reviews (Tasks 6–8, Sat 7 Nov, ~16:00–17:00, Sonnet + Fable)
-
-- **Who:** fresh reviewers per task; Fable for the verdicts (Task 8), with permission to re-derive numbers through the project's loader.
-- **Found:** the maths reproduced (Welch, boundary, simulation: an independent 2M-run check gave 22.5% naive vs 5.1% with c = 2.1). Fable found that looks anchored on the first install's time of day, so a date-only `as_of` of 16 Aug silently hit the previous look; non-goal timelines still showed "crossed" rows; the two Settings "end" views were unlabelled; and SPEC.md attributed p 0.067 (revenue to date) to the 30-day goal.
-- **What we changed:** day-aligned looks (re-derived independently: week 9 z moved 4.49 → 4.34 because 41 users installed in the four-hour gap leave the sample; same week, same verdict), no crossings on non-goal metrics, labelled end views, corrected SPEC. Following the project rule, the spec moved, not the test tolerance.
-- **What we will say on stage because of it:** "about $19k" (an independent matched-cohort check gives $17.5k), "p just under 0.05 on that day's check" (a permutation test gives 0.050), never the false-precision figures.
-
-### Real verdicts behind the tools (Task 9b, Sat 7 Nov, ~17:30, Fable + Sonnet)
-
-- **Found:** the core rule held on every path the reviewer could construct (a stop becomes pending only on WINNER for exactly the requested arm; replays, wrong arms, non-goal metrics, engine errors and unknown plans all block). Two hardening gaps: duplicate Adapty arm names could map to one flow, and the `evidence` shown to the agent came from a second judge call that could disagree with the decision after a transient error.
-- **What we changed:** the arm mapping must be one-to-one or it is refused as ambiguous, and `request_stop` makes one judge call whose result is both the decision and the evidence.
-
-### Closed loop, attack suite and demo safety (Sat 7 Nov, ~17:00–18:10, Fable + Sonnet + security plugin)
-
-- **Found:** `propose_test` passed the Fable review (no path to a create without a named policy approver; nothing in the new path can start or stop a test; the policy file fails closed in every malformed case tried). Both the review and an automated security check flagged that the "no live test on this placement" rule compared titles normalised differently at request and approval time; the attack-suite review found the backup script did not pass its port to the server it starts.
-- **What we changed:** the live-test rule matches by placement id (and fails closed if an id is unknown); the backup script forwards only its port, never the whole environment; the disguised-stop attack test was tightened.
+**Known limits, said openly:** on one machine and one OS user, a determined local process could read the one-time login code during its 60 s window or browser state, and the agent runs as the same OS user as Fulcrum. In production Fulcrum would run as a separate service under its own user, and approvals would use a separate channel.
 
 ## Phases
 

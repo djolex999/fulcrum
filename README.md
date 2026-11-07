@@ -21,7 +21,37 @@ The result is shipped "winners" that never actually won.
 - **Approval gate:** the agent has no token, it only has requests. A request becomes pending only if the statistics say there is a winner for that exact arm, and only a human clicking Approve on the local page makes Fulcrum stop the test. Adapty's own MCP asks the model to confirm before a stop, which is just a prompt; Fulcrum adds the rule in code, plus statistics, a human approver and a ledger of every attempt.
 - **Verdict engine:** a test is judged only on its declared goal. For Onboarding that is 60-day revenue per install, so until users have been in the app for 60 days the answer is always "not yet"; the first week anyone qualifies is week 9, and that is where it crosses the boundary.
 - **Agent loop:** the agent reads tests and asks for verdicts through Fulcrum's tools; every reply ends with the next step. It can also find a signal in the data (`find_signals`: users with 5+ AI edits on day one pay about twice as often) and propose a new test through the same door (`propose_test`): policy check, human approval, then Fulcrum creates a draft.
-- **Stopping boundaries:** to be written during the event.
+- **Stopping boundary:** at look k of K planned weekly looks, a test may stop only if |z| on its declared goal exceeds c × √(K/k). Early looks need overwhelming evidence; the bar falls to c at the last look. c = 2.1 for K = 15 is calibrated by simulating A/A tests (no real difference): weekly peeking at p < 0.05 calls a false winner about 22% of the time; the boundary, about 5%. K and the horizon come from the test plan (`test-plans.json`), with a visible fallback.
+
+## Architecture
+
+```mermaid
+flowchart LR
+  A["AI agent<br/>(Claude Code, sandboxed)<br/>no Adapty tool, no CLI, no token"] -- MCP stdio --> F
+  subgraph F["Fulcrum (holds ADAPTY_TOKEN)"]
+    direction TB
+    T["Tools: list_tests, judge_test, test_timeline,<br/>find_signals, request_stop, propose_test, request_status"]
+    V["Verdict: declared goal, horizon,<br/>c·√(K/k) boundary, as_of replay"]
+    P["Policy: fulcrum.policy.json"]
+    G["Gate: pending action + ledger"]
+    T --> V --> G
+    T --> P --> G
+  end
+  H["Human approver<br/>(local approval page)"] -- Approve / Reject --> G
+  G -- "only after approval" --> C["Adapty CLI"] --> AD[("Adapty")]
+  D[("Offline CSV export<br/>synthetic Lumen data")] --> V
+```
+
+## Run it
+
+```bash
+npm ci && npm run demo:story
+```
+
+Prints the whole story offline from the synthetic data, with no Adapty access and no token: the Settings peeking trap, the 22% vs 5% simulation, and the Onboarding "not yet, then now" timeline. It reads the public Lumen dataset from `~/Projects/adapty-seed-data-hack/data/offline` (clone [kpotehin/adapty-seed-data-hack](https://github.com/kpotehin/adapty-seed-data-hack) into `~/Projects`).
+
+- `npm test` runs all 188 tests; `npm run test:attacks` runs the bypass and abuse suite.
+- To run the agent: put `ADAPTY_TOKEN` in `.env` (see `.env.example`), then `cd demo && claude`. Fulcrum is the agent's only MCP server and reads the token from the repo's `.env` itself; the agent never sees it.
 
 ## Limitations
 
@@ -29,6 +59,8 @@ The result is shipped "winners" that never actually won.
 - **Isolation is client policy plus token absence.** The demo agent has no Adapty tool, no CLI write and no token; its only path to a write is Fulcrum. On one machine and one OS user this is enforced by Claude Code's sandbox, deny rules and a hook. In production Fulcrum would run as a separate service that holds the token.
 - **Approval page.** Local only (127.0.0.1), one human approver, a one-time login link; no multi-user auth.
 - **Gate state is in memory.** Restarting Fulcrum drops pending requests (the ledger on disk is kept).
+- **Pending requests expire after 30 minutes.** A stop is judged again when the human approves, and runs only if the verdict still holds.
+- **Drafts only.** `propose_test` creates a new test as a draft after approval; starting it is a human action in Adapty.
 
 ## Built with
 
