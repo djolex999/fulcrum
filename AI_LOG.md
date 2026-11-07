@@ -49,6 +49,11 @@ How AI was used to build Fulcrum at the Adapty Hackathon Belgrade (7 to 8 Nov 20
 - **Found:** no bypass (`stopTest` has one call site, after a named human approval; concurrent approvals execute once), no leak (every stored reason redacted). Three Important issues: concurrent requests for one test could create two pending actions (both reviewers found it; Fable reproduced it with two stops), the action became approvable before its ledger entry was written, and the judge's codes (`BEFORE_HORIZON`, `METRIC_NOT_GOAL`) never reached `request_stop`.
 - **What we changed:** the test slot is reserved before any await, the ledger is written first, and `request_stop` carries the judge's verdict and code (SPEC.md overruled the plan's wording). A Fable re-review confirmed all three fixed; the remaining observations are logged as known limits for the final review.
 
+### MCP server review (Task 9, Sat 7 Nov, ~14:20, Fable)
+
+- **Who:** a fresh Fable subagent with only the task brief, the diff and SPEC.md, asked whether the agent can bypass the gate through the server, whether the token can leak, whether stdout stays clean, and whether SPEC.md matches the code.
+- **Found:** no bypass (the server only gets the CLI's read methods at the type level; five tools, no approve tool, verified over real stdio), no leak (one scrub path for results, errors and logs; a smoke run with a fake token showed it nowhere), stdout carries only JSON-RPC. Approved with minor findings: error labelling for stats crashes, the wording of the in-progress result, sharing one judge between the gate and the tools. These are carried into the next wiring task.
+
 ## Phases
 
 One entry per build phase, written at the end of `phase-checkpoint` in Djordje's words.
