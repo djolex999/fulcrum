@@ -1,0 +1,15 @@
+[
+  {
+    "title": "Onboarding: annual trial vs weekly first",
+    "arms": ["onb_trial", "onb_weekly"],
+    "goal": "rpi",
+    "horizonDays": 60,
+    "K": 15
+  },
+  {
+    "title": "Settings: upgrade vs lifetime anchor",
+    "arms": ["main_lifetime", "settings"],
+    "goal": "rpi",
+    "horizonDays": 30
+  }
+]

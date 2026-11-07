@@ -1,0 +1,69 @@
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import type { Dataset } from "../data/csv.js";
+
+export const FALLBACK_K = 15;
+
+export interface TestPlan {
+  title: string;
+  arms: [string, string];
+  goal: "rpi";
+  /** null = revenue to date (no fixed horizon). */
+  horizonDays: number | null;
+  K?: number;
+}
+
+export type Metric = "rpi" | "rpi_7d" | "rpi_14d" | "rpi_30d" | "rpi_60d" | "payer_rate";
+
+export class UnknownTestError extends Error {
+  constructor(readonly title: string) {
+    super(`Unknown test "${title}": no users in the dataset carry this ab_test title`);
+    this.name = "UnknownTestError";
+  }
+}
+
+export const DEFAULT_PLANS_PATH = fileURLToPath(new URL("../../test-plans.json", import.meta.url));
+
+/** The declared goal metric name, derived from the plan's horizon. */
+export function goalMetricOf(plan: TestPlan): Metric {
+  if (plan.horizonDays === null) return "rpi";
+  const name = `rpi_${plan.horizonDays}d`;
+  if (name === "rpi_7d" || name === "rpi_14d" || name === "rpi_30d" || name === "rpi_60d") return name;
+  throw new Error(`Test "${plan.title}": horizonDays ${plan.horizonDays} has no metric name (use 7, 14, 30, 60 or null)`);
+}
+
+function parsePlan(raw: unknown, i: number): TestPlan {
+  const bad = (why: string): Error => new Error(`test-plans.json entry ${i}: ${why}`);
+  if (typeof raw !== "object" || raw === null) throw bad("not an object");
+  const r = raw as Record<string, unknown>;
+  if (typeof r.title !== "string" || r.title === "") throw bad("missing title");
+  const arms = r.arms;
+  if (!Array.isArray(arms) || arms.length !== 2 || !arms.every((a) => typeof a === "string" && a !== "")) {
+    throw bad(`"${r.title}" needs exactly two arm names`);
+  }
+  if (r.goal !== "rpi") throw bad(`"${r.title}" goal must be "rpi"`);
+  const h = r.horizonDays;
+  if (h !== null && !(typeof h === "number" && Number.isInteger(h) && h > 0)) {
+    throw bad(`"${r.title}" horizonDays must be a positive integer or null`);
+  }
+  const K = r.K;
+  if (K !== undefined && !(typeof K === "number" && Number.isInteger(K) && K >= 1)) {
+    throw bad(`"${r.title}" K must be an integer >= 1`);
+  }
+  const plan: TestPlan = { title: r.title, arms: [arms[0] as string, arms[1] as string], goal: "rpi", horizonDays: h };
+  if (K !== undefined) plan.K = K;
+  goalMetricOf(plan);
+  return plan;
+}
+
+/** Reads and validates the plans. With `data`, every plan title must exist in the dataset or UnknownTestError names it. */
+export function loadPlans(path: string = DEFAULT_PLANS_PATH, data?: Dataset): TestPlan[] {
+  const parsed: unknown = JSON.parse(readFileSync(path, "utf8"));
+  if (!Array.isArray(parsed)) throw new Error(`${path} must be a JSON array of test plans`);
+  const plans = parsed.map(parsePlan);
+  if (data) {
+    const titles = new Set(data.users.map((u) => u.abTest));
+    for (const p of plans) if (!titles.has(p.title)) throw new UnknownTestError(p.title);
+  }
+  return plans;
+}
