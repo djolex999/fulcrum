@@ -1,4 +1,7 @@
 {
+  "enabledPlugins": {
+    "adapty-skills@adapty": false
+  },
   "permissions": {
     "deny": [
       "Bash(adapty ab-tests archive:*)",

@@ -25,6 +25,8 @@ describe("demo agent isolation", () => {
     const raw = read("demo/.mcp.json");
     const cfg = JSON.parse(raw) as { mcpServers: Record<string, { command: string; args: string[]; env?: unknown }> };
     expect(Object.keys(cfg.mcpServers)).toEqual(["fulcrum"]);
+    const settings = JSON.parse(read("demo/.claude/settings.json")) as { enabledPlugins?: Record<string, boolean> };
+    expect(settings.enabledPlugins?.["adapty-skills@adapty"]).toBe(false);
     const s = cfg.mcpServers.fulcrum;
     expect(s?.command).toBe("node");
     expect(s?.args).toEqual(["../node_modules/tsx/dist/cli.mjs", "--tsconfig", "../tsconfig.json", "../src/mcp/server.ts"]);
