@@ -122,7 +122,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   }
 
   // list_tests: what exists, its state, and the goal metric and horizon from the test plan.
-  tool("list_tests", "List the app's Adapty A/B tests. Use a test_id from the result with judge_test; goal_metric is the only metric a verdict can be asked on.", {}, async () => {
+  tool("list_tests", "List the app's Adapty A/B tests. goal_metric is the only metric a verdict can be asked on. Use a test_id from the result with judge_test.", {}, async () => {
     const tests = await cli.listTests();
     return {
       tests: tests.map((t) => {
@@ -177,7 +177,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   // winner becomes "pending" for a human; everything else is "blocked" with the reason.
   tool(
     "request_stop",
-    "Ask to stop a live test with a declared winner. Fulcrum judges it first; a human must approve in the Fulcrum UI. There is no approve tool. pending means a human must approve at the approval page; poll request_status. blocked means read the reason for the next step.",
+    "Ask to stop a live test with a declared winner. Fulcrum judges it first; a human must approve in the Fulcrum UI. There is no approve tool. blocked means the reason gives the next step. pending means a human must approve at the approval page; poll request_status.",
     {
       test_id: z.string(),
       winner_arm_id: z.string(),
@@ -230,7 +230,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
       // the verdict's next step (when to ask again, which metric to use), so it is passed through unchanged.
       const reason =
         r.status === "pending"
-          ? `${r.reason} Waiting for human approval at ${approvalUrl} (the approver signs in from the link Fulcrum opened in their browser). Poll request_status with action_id ${r.actionId}.`
+          ? `Next: a human must approve at ${approvalUrl}; poll request_status with action_id ${r.actionId}. ${r.reason}`
           : r.reason;
       return {
         action_id: r.actionId,

@@ -123,7 +123,8 @@ describe.skipIf(!real)("AGENT-UX every non-success reply names the next step", (
     expect(tools.map((t) => t.name).sort()).toEqual(["judge_test", "list_tests", "request_status", "request_stop", "test_timeline"]);
     for (const t of tools) {
       expect(t.description ?? "").not.toBe("");
-      expect(t.description).toMatch(/\b(use|ask|poll|read|keep polling)\b/i);
+      const last = (t.description ?? "").split(". ").map((x) => x.trim()).filter((x) => x !== "").pop() ?? "";
+      expect(last).toMatch(/\b(ask|poll|use|call|approve|keep)\b/i);
     }
 
   });

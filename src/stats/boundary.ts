@@ -128,7 +128,7 @@ export function calibrateC(K: number, target = 0.05, seed = 1): number {
 }
 
 /**
- * Precomputed constants, rounded to 2 decimals. 15 is the brief's value; an independent 2M-sim
+ * Precomputed constants, rounded to 2 decimals. 15 is the planned value; an independent 2M-sim
  * check puts the exact c for 5% at about 2.11, and calibrateC(15) (40k sims, seed 1) gives 2.128
  * from sampling noise. 10 and 20 are omitted: at 40k sims calibrateC is only good to about
  * +/-0.02, so those entries would not be trustworthy.
