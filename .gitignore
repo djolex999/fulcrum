@@ -12,7 +12,9 @@ __pycache__/
 
 # Local data (never commit; offline data is read in place from outside the repo)
 *.sqlite
-data/
+/data/
+*.csv
+*.csv.gz
 
 # Claude Code personal settings
 .claude/settings.local.json
