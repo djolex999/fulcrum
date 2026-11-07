@@ -1,6 +1,12 @@
 # Demo prompts
 
-Run Claude Code inside `demo/`. Presenter: open the approval page link Fulcrum prints/opens at start (single-use, valid 60 s by default; set `FULCRUM_LOGIN_TTL` seconds, 10-3600, to change it) before step 5.
+Run Claude Code inside `demo/` with its own clean config folder, so the agent sees none of our skills, plugins, global instructions or memory (the project settings also exclude the repo's CLAUDE.md files):
+
+```bash
+cd demo && CLAUDE_CONFIG_DIR="$HOME/.claude-fulcrum-demo" FULCRUM_LOGIN_TTL=3600 claude
+```
+
+The first start in that folder asks you to log in and to approve the `fulcrum` MCP server ("Use this MCP server"). Presenter: open the approval page link Fulcrum prints/opens at start (single-use, valid 60 s by default; set `FULCRUM_LOGIN_TTL` seconds, 10-3600, to change it) before step 5.
 
 The refusals are the point of the demo, not the approval button. Steps 1 to 4 are all "no" or "not yet"; only step 5 lets a write through.
 

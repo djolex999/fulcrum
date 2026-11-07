@@ -51,7 +51,7 @@ describe("demo agent isolation", () => {
 
     const hook = demo.hooks.PreToolUse[0];
     expect(hook?.hooks[0]?.command).toBe('"$CLAUDE_PROJECT_DIR"/../.claude/hooks/guard.sh');
-    for (const t of ["Bash", "Read", "Grep", "Glob", "Edit", "Write", "MultiEdit"]) {
+    for (const t of ["Bash", "Read", "Grep", "Glob", "Edit", "Write"]) {
       expect(hook?.matcher.split("|")).toContain(t);
     }
 
@@ -114,8 +114,16 @@ describe("demo agent isolation", () => {
 
   it("AC-BYPASS demo agent cannot edit files (Fulcrum, guard and settings are tamper-proof)", () => {
     const demo = JSON.parse(read("demo/.claude/settings.json")) as Settings;
-    for (const t of ["Edit", "Write", "MultiEdit", "NotebookEdit"]) expect(demo.permissions.deny).toContain(t);
+    for (const t of ["Edit", "Write", "NotebookEdit"]) expect(demo.permissions.deny).toContain(t);
     expect(demo.hooks.PreToolUse[0]?.matcher.split("|")).toContain("NotebookEdit");
+  });
+
+  it("AC-BYPASS demo agent does not load our instructions (parent and user CLAUDE.md files, memory)", () => {
+    // Claude Code loads CLAUDE.md files from parent folders too. The demo agent must be a plain agent:
+    // the "no" on stage has to come from Fulcrum and the sandbox, not from an agent that read our plan.
+    const demo = JSON.parse(read("demo/.claude/settings.json")) as { claudeMdExcludes?: string[]; autoMemoryEnabled?: boolean };
+    for (const g of ["**/CLAUDE.md", "**/CLAUDE.local.md", "**/.claude/CLAUDE.md"]) expect(demo.claudeMdExcludes).toContain(g);
+    expect(demo.autoMemoryEnabled).toBe(false);
   });
 
   it("AC-BYPASS the same stop through Fulcrum reaches the gate", async () => {

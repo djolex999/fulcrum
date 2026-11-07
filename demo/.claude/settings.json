@@ -1,4 +1,11 @@
 {
+  "claudeMdExcludes": [
+    "**/CLAUDE.md",
+    "**/CLAUDE.local.md",
+    "**/.claude/CLAUDE.md",
+    "**/.claude/rules/**"
+  ],
+  "autoMemoryEnabled": false,
   "enabledPlugins": {
     "adapty-skills@adapty": false
   },
@@ -88,7 +95,6 @@
       "Read(../.env.*)",
       "Edit",
       "Write",
-      "MultiEdit",
       "NotebookEdit"
     ],
     "blockWritesOutsideWorkingDirectories": true
@@ -96,7 +102,7 @@
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|NotebookEdit",
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|NotebookEdit",
         "hooks": [
           {
             "type": "command",
