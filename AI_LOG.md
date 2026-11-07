@@ -15,6 +15,21 @@ How AI was used to build Fulcrum at the Adapty Hackathon Belgrade (7 to 8 Nov 20
 - **Guard hook.** A `PreToolUse` hook ([.claude/hooks/guard.sh](.claude/hooks/guard.sh)) backs up the deny rules, which only match exact command prefixes. It parses every Bash command and denies Adapty write commands in any form (`npx adapty@…`, full paths, `bash -c`, `$(…)`, chains) plus `adapty apps get`, and denies `.env` access through Bash, Read, Grep, Glob, Edit and Write. If it cannot check a call, it denies it. Tested by [.claude/hooks/guard.test.sh](.claude/hooks/guard.test.sh). This is a client-side policy, not a security boundary: the real boundary is that only the Fulcrum process holds `ADAPTY_TOKEN` (see SPEC.md). Hardened over three rounds of automated security review (quoted values, `npx`/path/`bash -c` forms, variable and ANSI-C command words, `.env` globs and brace tricks), then deliberately stopped: a text-matching guard cannot fully parse shell. Known limits: a script file that calls `adapty`, and deliberate obfuscation.
 - **Activity hook.** A `PostToolUse` hook ([.claude/hooks/ai-log.sh](.claude/hooks/ai-log.sh)) appends one JSON line per Edit, Write, MultiEdit or Bash call to [.ai-log/events.jsonl](.ai-log/events.jsonl): timestamp, tool, file path or the first 120 characters of the command, and a success flag. Secrets are redacted before writing (known token prefixes, `*KEY*`/`*TOKEN*`/`*SECRET*`/`*PASSWORD*` values, auth headers and Bearer tokens, credentials in URLs, long random strings), and file contents and prompts are never logged. The log is public on purpose, as evidence. Tested by [.claude/hooks/ai-log.test.sh](.claude/hooks/ai-log.test.sh).
 
+## Independent reviews
+
+### Cross-check 1: pitch numbers from raw data (Sat 7 Nov, ~12:05)
+
+- **Who:** a fresh Claude subagent with no project context. It could read only the offline CSVs and `flows/*.json` of the public Lumen dataset; it was told not to read this repo, the spec or our notes, and got none of our numbers. It ran nothing from the dataset repo. Its report is kept locally.
+- **Method (its own):** arm = `flow` within `ab_test`; RPI = net revenue (refunds subtracted at refund time) within D days of install over all installs, only users with the full D days; Welch test on per-user values; looks every 7 days from the first install, K = 15, boundary 2.1 × sqrt(15/k).
+- **Agrees:**
+  - Onboarding first crosses the boundary at **week 9** (z ≈ −4.5 against 2.71); weekly-first wins.
+  - Settings at the end: difference **$1.57**, **p = 0.067**, the other arm leads.
+- **Roughly agrees:** extra revenue from shipping Onboarding at week 9 is **≈ $19.4k** by its age-curve method (our estimate: ≈ $21k). The simple "users × D60 gap" approximation gives ≈ $27k, which overstates it.
+- **Differs:**
+  - Settings **as of 2026-09-02**: it finds −$1.37, **p = 0.26** on revenue to date (and the leader flips at a fixed 30-day horizon, p = 0.56). Our estimate was +$2.48, p ≈ 0.049. **Unresolved:** the result depends on the RPI definition and horizon. The implementation must reproduce a stated definition before this goes in the demo.
+  - Onboarding RPI gap: ≈ $4.05 at D60 (our note said +$3.63 without a horizon).
+- **Action:** pitch numbers stay [estimate] until the implementation's AC-1/AC-2 tests produce them; use "≈ $20k" until then.
+
 ## Phases
 
 One entry per build phase, written at the end of `phase-checkpoint` in Djordje's words.
