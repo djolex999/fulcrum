@@ -55,5 +55,20 @@
     "goal": "rpi",
     "horizonDays": 60,
     "K": 15
+  },
+  {
+    "title": "Throwaway C: onboarding rehearsal",
+    "dataTitle": "Onboarding: annual trial vs weekly first",
+    "arms": [
+      "onb_trial",
+      "onb_weekly"
+    ],
+    "adaptyFlowNames": [
+      "Onboarding - Annual trial",
+      "Onboarding - Weekly first"
+    ],
+    "goal": "rpi",
+    "horizonDays": 60,
+    "K": 15
   }
 ]

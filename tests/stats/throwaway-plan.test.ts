@@ -22,7 +22,7 @@ describe.skipIf(!real)("throwaway rehearsal plans", () => {
     const onb = plans.find((p) => p.title.startsWith("Onboarding"));
     const throwaways = plans.filter((p) => p.title.startsWith("Throwaway"));
     expect(onb).toBeDefined();
-    expect(throwaways.length).toBe(2);
+    expect(throwaways.length).toBe(3);
     for (const t of throwaways) {
       expect(dataTitleOf(t)).toBe(onb?.title);
       expect(t.title.toLowerCase().startsWith("onboarding")).toBe(false);
