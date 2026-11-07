@@ -1,6 +1,7 @@
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { createHmac } from "node:crypto";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { AbTestDetail, ApprovedStop } from "../../src/adapty/types.js";
 import { createLedger } from "../../src/gate/ledger.js";
@@ -19,9 +20,11 @@ const REQ = { testId: "t1", winnerArmId: "a1", metric: "arpu", rationale: "ship 
 const PORT = 8787;
 const GOOD = `http://127.0.0.1:${PORT}`;
 const HOST = `127.0.0.1:${PORT}`;
-const SESSION = "s".repeat(64);
-const CSRF = "c".repeat(64);
-const COOKIE = `fulcrum_session=${SESSION}`;
+const LOGIN = "l".repeat(64);
+const CSRF_SECRET = "c".repeat(64);
+// Set by await setup() after a real login through the app.
+let COOKIE = "";
+let CSRF = "";
 
 let dir: string;
 let calls: ApprovedStop[];
@@ -32,7 +35,7 @@ beforeEach(() => {
 });
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-function setup(judge: Judge = winner) {
+async function setup(judge: Judge = winner, now?: () => number) {
   const ledger = createLedger(join(dir, "ledger.jsonl"));
   const cli = {
     stopTest: async (a: ApprovedStop) => {
@@ -41,8 +44,18 @@ function setup(judge: Judge = winner) {
     },
   };
   const gate = createGate({ cli, ledger, judge });
-  const app = buildApprovalApp(gate, ledger, { port: PORT, sessionSecret: SESSION, csrfSecret: CSRF });
+  const app = buildApprovalApp(gate, ledger, { port: PORT, loginCode: LOGIN, csrfSecret: CSRF_SECRET, ...(now ? { now } : {}) });
+  const s = await loginSession(app);
+  COOKIE = s.cookie;
+  CSRF = s.csrf;
   return { gate, ledger, app };
+}
+
+async function loginSession(app: ReturnType<typeof buildApprovalApp>) {
+  const res = await app.request(`/login?t=${LOGIN}`, { headers: { host: HOST } });
+  const cookie = (res.headers.get("set-cookie") ?? "").split(";")[0] ?? "";
+  const csrf = createHmac("sha256", CSRF_SECRET).update(cookie.split("=")[1] ?? "").digest("hex");
+  return { cookie, csrf };
 }
 
 interface Opts {
@@ -74,7 +87,7 @@ const get = (o: Opts = {}) => {
 
 describe("approval page", () => {
   it("GET / lists a pending action with csrf field and rationale", async () => {
-    const { gate, app } = setup();
+    const { gate, app } = await setup();
     const { actionId } = await gate.requestStop(REQ);
     const html = await (await app.request("/", get())).text();
     for (const s of [actionId, "t1", "arpu", "WINNER", "clear win", `/approve/${actionId}`, `/reject/${actionId}`]) {
@@ -85,7 +98,7 @@ describe("approval page", () => {
   });
 
   it("the rationale is shown escaped on the page", async () => {
-    const { gate, app } = setup();
+    const { gate, app } = await setup();
     await gate.requestStop({ ...REQ, rationale: "<b>because</b> ship it" });
     const html = await (await app.request("/", get())).text();
     expect(html).toContain("&lt;b&gt;because&lt;/b&gt; ship it");
@@ -93,7 +106,7 @@ describe("approval page", () => {
   });
 
   it("approve with a name executes once and redirects", async () => {
-    const { gate, app } = setup();
+    const { gate, app } = await setup();
     const { actionId } = await gate.requestStop(REQ);
     const res = await app.request(`/approve/${actionId}`, post("djole"));
     expect(res.status).toBe(303);
@@ -104,7 +117,7 @@ describe("approval page", () => {
   });
 
   it("approve with an empty or blank name is 400 and makes no CLI call", async () => {
-    const { gate, app } = setup();
+    const { gate, app } = await setup();
     const { actionId } = await gate.requestStop(REQ);
     expect((await app.request(`/approve/${actionId}`, post(""))).status).toBe(400);
     expect((await app.request(`/approve/${actionId}`, post("   "))).status).toBe(400);
@@ -113,7 +126,7 @@ describe("approval page", () => {
   });
 
   it("AC-4 POST approve without session cookie is 401 and runs no stop", async () => {
-    const { gate, app } = setup();
+    const { gate, app } = await setup();
     const { actionId } = await gate.requestStop(REQ);
     expect((await app.request(`/approve/${actionId}`, post("djole", { cookie: null }))).status).toBe(401);
     expect((await app.request(`/approve/${actionId}`, post("djole", { cookie: "fulcrum_session=wrong" }))).status).toBe(401);
@@ -123,7 +136,7 @@ describe("approval page", () => {
   });
 
   it("POST approve with cookie but wrong or missing csrf is 403 and runs no stop", async () => {
-    const { gate, app } = setup();
+    const { gate, app } = await setup();
     const { actionId } = await gate.requestStop(REQ);
     expect((await app.request(`/approve/${actionId}`, post("djole", { csrf: null }))).status).toBe(403);
     expect((await app.request(`/approve/${actionId}`, post("djole", { csrf: "x".repeat(64) }))).status).toBe(403);
@@ -133,14 +146,14 @@ describe("approval page", () => {
   });
 
   it("POST approve with no Origin header is 403", async () => {
-    const { gate, app } = setup();
+    const { gate, app } = await setup();
     const { actionId } = await gate.requestStop(REQ);
     expect((await app.request(`/approve/${actionId}`, post("djole", { origin: null }))).status).toBe(403);
     expect(calls).toHaveLength(0);
   });
 
   it("a foreign Origin is 403 and makes no CLI call", async () => {
-    const { gate, app } = setup();
+    const { gate, app } = await setup();
     const { actionId } = await gate.requestStop(REQ);
     for (const origin of ["https://evil.example", "null", `http://127.0.0.1:${PORT + 1}`, `http://localhost:${PORT}.evil.com`]) {
       expect((await app.request(`/approve/${actionId}`, post("djole", { origin }))).status).toBe(403);
@@ -149,7 +162,7 @@ describe("approval page", () => {
   });
 
   it("localhost origin and host are accepted", async () => {
-    const { gate, app } = setup();
+    const { gate, app } = await setup();
     const { actionId } = await gate.requestStop(REQ);
     const res = await app.request(
       `/reject/${actionId}`,
@@ -161,51 +174,89 @@ describe("approval page", () => {
   });
 
   it("unknown id is 404", async () => {
-    const { app } = setup();
+    const { app } = await setup();
     expect((await app.request("/approve/nope", post("djole"))).status).toBe(404);
     expect((await app.request("/reject/nope", post("djole"))).status).toBe(404);
   });
 
   it("GET / without cookie is 401, GET /ledger too", async () => {
-    const { app } = setup();
+    const { app } = await setup();
     const res = await app.request("/", get({ cookie: null }));
     expect(res.status).toBe(401);
     expect(await res.text()).toContain("Open the link Fulcrum opened in your browser");
     expect((await app.request("/ledger", get({ cookie: null }))).status).toBe(401);
   });
 
-  it("GET /login with wrong t is 401", async () => {
-    const { app } = setup();
+  it("GET /login with wrong t or no t is 401", async () => {
+    const { app } = await setup();
     expect((await app.request("/login?t=nope", get({ cookie: null }))).status).toBe(401);
-    expect((await app.request("/login", get({ cookie: null }))).status).toBe(401);
+    const none = await app.request("/login", get({ cookie: null }));
+    expect(none.status).toBe(401);
+    expect(await none.text()).toContain("Restart Fulcrum");
   });
 
   it("GET /login with right t sets HttpOnly SameSite=Strict cookie", async () => {
-    const { app } = setup();
-    const res = await app.request(`/login?t=${SESSION}`, get({ cookie: null }));
+    const app = buildApprovalApp(createGate({ cli: { stopTest: async () => DETAIL }, ledger: createLedger(join(dir, "l2.jsonl")), judge: winner }), undefined, { port: PORT, loginCode: LOGIN, csrfSecret: CSRF_SECRET });
+    const res = await app.request(`/login?t=${LOGIN}`, get({ cookie: null }));
     expect(res.status).toBe(303);
     expect(res.headers.get("location")).toBe("/");
     const cookie = res.headers.get("set-cookie") ?? "";
-    expect(cookie).toContain(`fulcrum_session=${SESSION}`);
     expect(cookie).toMatch(/HttpOnly/i);
     expect(cookie).toMatch(/SameSite=Strict/i);
     expect(cookie).toContain("Path=/");
   });
 
+  it("cookie value is not the login code", async () => {
+    await setup();
+    expect(COOKIE).toMatch(/^fulcrum_session=[0-9a-f]{64}$/);
+    expect(COOKIE).not.toContain(LOGIN);
+    expect(COOKIE).not.toContain(CSRF_SECRET);
+  });
+
+  it("login code is single-use", async () => {
+    const { app } = await setup();
+    const second = await app.request(`/login?t=${LOGIN}`, get({ cookie: null }));
+    expect(second.status).toBe(401);
+    expect(second.headers.get("set-cookie")).toBeNull();
+  });
+
+  it("login code expires after 60 s", async () => {
+    let t = 1_000_000;
+    const ledger = createLedger(join(dir, "l3.jsonl"));
+    const gate = createGate({ cli: { stopTest: async () => DETAIL }, ledger, judge: winner });
+    const app = buildApprovalApp(gate, ledger, { port: PORT, loginCode: LOGIN, csrfSecret: CSRF_SECRET, now: () => t });
+    t += 61_000;
+    expect((await app.request(`/login?t=${LOGIN}`, get({ cookie: null }))).status).toBe(401);
+    const app2 = buildApprovalApp(gate, ledger, { port: PORT, loginCode: LOGIN, csrfSecret: CSRF_SECRET, now: () => t });
+    t += 59_000;
+    expect((await app2.request(`/login?t=${LOGIN}`, get({ cookie: null }))).status).toBe(303);
+  });
+
+  it("csrf from one session is rejected for another session", async () => {
+    const { gate, app } = await setup();
+    const { actionId } = await gate.requestStop(REQ);
+    // A second session needs a fresh login code, so build a second app instance sharing the gate
+    // is not enough; derive a csrf for a different session id and expect rejection.
+    const other = createHmac("sha256", CSRF_SECRET).update("some-other-session").digest("hex");
+    expect((await app.request(`/approve/${actionId}`, post("djole", { csrf: other }))).status).toBe(403);
+    expect(calls).toHaveLength(0);
+    expect((await app.request(`/approve/${actionId}`, post("djole"))).status).toBe(303);
+  });
+
   it("wrong Host is rejected", async () => {
-    const { app } = setup();
+    const { app } = await setup();
     for (const host of ["evil.example", `127.0.0.1:${PORT + 1}`, `localhost`]) {
       expect((await app.request("/", get({ host }))).status).toBe(421);
-      expect((await app.request(`/login?t=${SESSION}`, get({ host, cookie: null }))).status).toBe(421);
+      expect((await app.request(`/login?t=${LOGIN}`, get({ host, cookie: null }))).status).toBe(421);
     }
   });
 
   it("frame headers present", async () => {
-    const { app } = setup();
+    const { app } = await setup();
     for (const res of [
       await app.request("/", get()),
       await app.request("/", get({ cookie: null })),
-      await app.request(`/login?t=${SESSION}`, get({ cookie: null })),
+      await app.request(`/login?t=${LOGIN}`, get({ cookie: null })),
     ]) {
       expect(res.headers.get("x-frame-options")).toBe("DENY");
       expect(res.headers.get("content-security-policy")).toBe("frame-ancestors 'none'");
@@ -218,7 +269,7 @@ describe("approval page", () => {
       n++ === 0
         ? { verdict: "WINNER", winnerArmId: "a1", reasons: ["ok"] }
         : { verdict: "CONTINUE", reasons: ["data moved <b>"] };
-    const { gate, app } = setup(flip);
+    const { gate, app } = await setup(flip);
     const { actionId } = await gate.requestStop(REQ);
     const res = await app.request(`/approve/${actionId}`, post("djole"));
     expect(res.status).toBe(200);
@@ -234,7 +285,7 @@ describe("approval page", () => {
       winnerArmId: "a1",
       reasons: ["<script>alert(1)</script>"],
     });
-    const { gate, app } = setup(evil);
+    const { gate, app } = await setup(evil);
     await gate.requestStop({ ...REQ, testId: "t<img src=x>", rationale: "<script>alert(2)</script>" });
     const html = await (await app.request("/", get())).text();
     expect(html).not.toContain("<script>alert");
@@ -246,7 +297,7 @@ describe("approval page", () => {
   });
 
   it("GET /ledger shows only the last 20 entries and is read-only", async () => {
-    const { ledger, app } = setup();
+    const { ledger, app } = await setup();
     for (let i = 0; i < 25; i++) {
       ledger.append({ id: `id-${i}`, ts: "2026-11-07T00:00:00Z", tool: "request_stop", testId: "t", args: {}, verdict: "X", status: "blocked", reason: "r" });
     }
@@ -260,14 +311,18 @@ describe("approval page", () => {
 });
 
 describe("startApprovalPage", () => {
-  async function start(env: Record<string, string | undefined> = {}) {
+  async function start(env: Record<string, string | undefined> = {}, listen: "ok" | "fail" = "ok") {
     vi.resetModules();
     const handlers: Record<string, (e: Error) => void> = {};
-    const serve = vi.fn((_opts: unknown) => ({
+    let onListening: () => void = () => {};
+    const serve = vi.fn((_opts: unknown, cb?: () => void) => {
+      if (cb) onListening = cb;
+      return {
       on: (ev: string, fn: (e: Error) => void) => {
         handlers[ev] = fn;
       },
-    }));
+      };
+    });
     vi.doMock("@hono/node-server", () => ({ serve }));
     const prev = process.env.FULCRUM_NO_BROWSER;
     if ("FULCRUM_NO_BROWSER" in env) {
@@ -275,12 +330,14 @@ describe("startApprovalPage", () => {
       else process.env.FULCRUM_NO_BROWSER = env.FULCRUM_NO_BROWSER;
     }
     const mod = await import("../../src/ui/approve.js");
-    const { gate, ledger } = setup();
+    const { gate, ledger } = await setup();
     const logs: string[] = [];
     const urls: string[] = [];
     const stderr = vi.spyOn(process.stderr, "write").mockImplementation(() => true);
     const stdout = vi.spyOn(process.stdout, "write").mockImplementation(() => true);
     mod.startApprovalPage(gate, 9999, ledger, (m) => logs.push(m), (u) => urls.push(u));
+    if (listen === "ok") onListening();
+    else handlers["error"]?.(new Error("listen EADDRINUSE"));
     const written = [...stderr.mock.calls, ...stdout.mock.calls].map((c) => String(c[0]));
     stderr.mockRestore();
     stdout.mockRestore();
@@ -298,7 +355,7 @@ describe("startApprovalPage", () => {
     expect(opts.port).toBe(9999);
   });
 
-  it("opens the login url with the session secret; FULCRUM_NO_BROWSER=1 skips it", async () => {
+  it("opens the login url with the one-time code; FULCRUM_NO_BROWSER=1 skips it", async () => {
     const r = await start({ FULCRUM_NO_BROWSER: undefined });
     expect(r.urls).toHaveLength(1);
     expect(r.urls[0]).toMatch(/^http:\/\/127\.0\.0\.1:9999\/login\?t=[0-9a-f]{64}$/);
@@ -311,6 +368,18 @@ describe("startApprovalPage", () => {
     const secret = /t=([0-9a-f]{64})/.exec(r.urls[0] ?? "")?.[1] ?? "";
     expect(secret).toHaveLength(64);
     expect([...r.logs, ...r.written].join("\n")).not.toContain(secret);
+  });
+
+  it("browser not opened when listen fails", async () => {
+    const r = await start({ FULCRUM_NO_BROWSER: undefined }, "fail");
+    expect(r.urls).toHaveLength(0);
+    expect(r.logs.join("\n")).toContain("EADDRINUSE");
+    expect(r.logs.join("\n")).not.toContain("approval page on");
+  });
+
+  it("browser is opened only after listening", async () => {
+    const r = await start({ FULCRUM_NO_BROWSER: undefined }, "ok");
+    expect(r.urls).toHaveLength(1);
   });
 
   it("a serve error is logged and does not throw", async () => {

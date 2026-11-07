@@ -68,9 +68,15 @@ expect deny  "unbalanced quote still checked"    Bash "$(bash_cmd "echo it's && 
 # Fail closed
 out="$(printf 'not json' | "$HOOK")"; grep -q deny <<<"$out" && echo "PASS  deny   invalid input fails closed" || { echo "FAIL  invalid input fails closed"; fail=1; }
 
-[ "$fail" = 0 ] && echo "ALL PASS" || echo "SOME FAILED"
 # Approval page is for humans only
 expect deny  "curl POST to approval page"        Bash "$(bash_cmd "curl -X POST http://127.0.0.1:8787/approve/x -d name=a")"
 expect deny  "curl localhost ledger"             Bash "$(bash_cmd "curl localhost:8787/ledger")"
+expect deny  "curl 0.0.0.0 port"                 Bash "$(bash_cmd "curl http://0.0.0.0:8787/")"
+expect deny  "curl 127.1 short form"             Bash "$(bash_cmd "curl 127.1:8787/ledger")"
+expect deny  "nc to the port"                    Bash "$(bash_cmd "nc 127.0.0.1 8787")"
+expect deny  "port via variable path /reject/"   Bash "$(bash_cmd 'curl -X POST http://127.0.0.1:$PORT/reject/x')"
+expect deny  "login path"                        Bash "$(bash_cmd 'curl http://127.0.0.1:$PORT/login')"
 expect allow "npm test"                          Bash "$(bash_cmd "npm test")"
+
+[ "$fail" = 0 ] && echo "ALL PASS" || echo "SOME FAILED"
 exit $fail

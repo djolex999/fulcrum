@@ -1,5 +1,5 @@
 import { execFile } from "node:child_process";
-import { randomBytes, timingSafeEqual } from "node:crypto";
+import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { serve } from "@hono/node-server";
 import { Hono, type Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
@@ -34,9 +34,12 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 export interface ApprovalSecrets {
-  sessionSecret: string;
+  /** Single-use, short-lived code carried in the login URL. Never the cookie value. */
+  loginCode: string;
   csrfSecret: string;
 }
+
+const LOGIN_TTL_MS = 60_000;
 
 const SESSION_COOKIE = "fulcrum_session";
 
@@ -62,10 +65,16 @@ function listPage(gate: Gate, csrf: string, notice?: string): string {
 export function buildApprovalApp(
   gate: Gate,
   ledger: Ledger | undefined,
-  opts: ApprovalSecrets & { port?: number },
+  opts: ApprovalSecrets & { port?: number; now?: () => number },
 ): Hono {
   const port = opts.port ?? 8787;
-  const { sessionSecret, csrfSecret } = opts;
+  const { csrfSecret } = opts;
+  const now = opts.now ?? (() => Date.now());
+  let loginCode: string | null = opts.loginCode;
+  const loginExpiresAt = now() + LOGIN_TTL_MS;
+  const sessions = new Set<string>();
+  const csrfFor = (sessionId: string): string => createHmac("sha256", csrfSecret).update(sessionId).digest("hex");
+  const sessionOf = (c: Context): string => getCookie(c, SESSION_COOKIE) ?? "";
   const { scrub } = createLogger("");
   const app = new Hono();
   const allowedOrigins = new Set([`http://127.0.0.1:${port}`, `http://localhost:${port}`]);
@@ -85,15 +94,20 @@ export function buildApprovalApp(
   });
 
   app.get("/login", (c) => {
-    const t = c.req.query("t") ?? "";
-    if (!safeEqual(t, sessionSecret)) return c.text("invalid login link", 401);
-    setCookie(c, SESSION_COOKIE, sessionSecret, { httpOnly: true, sameSite: "Strict", path: "/" });
+    const t = c.req.query("t");
+    if (t === undefined) return c.text("Restart Fulcrum to get a new login link.", 401);
+    if (loginCode === null || now() > loginExpiresAt || !safeEqual(t, loginCode)) {
+      return c.text("invalid or expired login link; restart Fulcrum for a new one", 401);
+    }
+    loginCode = null; // single use
+    const sessionId = randomBytes(32).toString("hex");
+    sessions.add(sessionId);
+    setCookie(c, SESSION_COOKIE, sessionId, { httpOnly: true, sameSite: "Strict", path: "/" });
     return c.redirect("/", 303);
   });
 
   app.use("*", async (c, next) => {
-    const cookie = getCookie(c, SESSION_COOKIE) ?? "";
-    if (!safeEqual(cookie, sessionSecret)) {
+    if (!sessions.has(sessionOf(c))) {
       return c.html(page("Fulcrum", "<p>Open the link Fulcrum opened in your browser.</p>"), 401);
     }
     if (c.req.method === "POST") {
@@ -103,13 +117,13 @@ export function buildApprovalApp(
     await next();
   });
 
-  app.get("/", (c) => c.html(listPage(gate, csrfSecret)));
+  app.get("/", (c) => c.html(listPage(gate, csrfFor(sessionOf(c)))));
 
   async function decide(c: Context, kind: "approve" | "reject") {
     const id = c.req.param("id") ?? "";
     const body = await c.req.parseBody();
     const csrf = body["csrf"];
-    if (typeof csrf !== "string" || !safeEqual(csrf, csrfSecret)) return c.text("bad csrf token", 403);
+    if (typeof csrf !== "string" || !safeEqual(csrf, csrfFor(sessionOf(c)))) return c.text("bad csrf token", 403);
     const raw = body["name"];
     const name = typeof raw === "string" ? raw.trim() : "";
     if (name === "") return c.text("approver name is required", 400);
@@ -125,11 +139,11 @@ export function buildApprovalApp(
       result = kind === "approve" ? await gate.approve(id, name) : gate.reject(id, name);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      return c.html(listPage(gate, csrfSecret, `Refused: ${msg}`), 400);
+      return c.html(listPage(gate, csrfFor(sessionOf(c)), `Refused: ${msg}`), 400);
     }
     const done = kind === "approve" ? result.status === "executed" : result.status === "rejected";
     if (done) return c.redirect("/", 303);
-    return c.html(listPage(gate, csrfSecret, `Not ${kind === "approve" ? "executed" : "rejected"} (${result.status}): ${result.reason}`));
+    return c.html(listPage(gate, csrfFor(sessionOf(c)), `Not ${kind === "approve" ? "executed" : "rejected"} (${result.status}): ${result.reason}`));
   }
 
   app.post("/approve/:id", (c) => decide(c, "approve"));
@@ -162,17 +176,21 @@ export function startApprovalPage(
   openBrowser: (url: string) => void = defaultOpen(log),
 ): void {
   // In memory only: never logged, written or printed.
-  const sessionSecret = randomBytes(32).toString("hex");
+  const loginCode = randomBytes(32).toString("hex");
   const csrfSecret = randomBytes(32).toString("hex");
-  const app = buildApprovalApp(gate, ledger, { port, sessionSecret, csrfSecret });
-  const server = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" });
+  const app = buildApprovalApp(gate, ledger, { port, loginCode, csrfSecret });
+  let failed = false;
+  const server = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, () => {
+    if (failed) return;
+    log(`approval page on http://127.0.0.1:${port}`);
+    if (process.env.FULCRUM_NO_BROWSER !== "1") {
+      openBrowser(`http://127.0.0.1:${port}/login?t=${loginCode}`);
+    }
+  });
   server.on("error", (err: Error) => {
+    failed = true;
     log(`approval page error: ${err.message}`);
   });
-  log(`approval page on http://127.0.0.1:${port}`);
-  if (process.env.FULCRUM_NO_BROWSER !== "1") {
-    openBrowser(`http://127.0.0.1:${port}/login?t=${sessionSecret}`);
-  }
 }
 
 function defaultOpen(log: (message: string) => void): (url: string) => void {
