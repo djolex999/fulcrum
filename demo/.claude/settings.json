@@ -115,7 +115,12 @@
         ".mcp.json",
         "CLAUDE.md",
         "node_modules",
-        "package.json"
+        "package.json",
+        "tsconfig.json",
+        "jsconfig.json",
+        ".npmrc",
+        ".env",
+        ".env.*"
       ]
     }
   }

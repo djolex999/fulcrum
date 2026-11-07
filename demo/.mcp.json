@@ -4,6 +4,8 @@
       "command": "node",
       "args": [
         "../node_modules/tsx/dist/cli.mjs",
+        "--tsconfig",
+        "../tsconfig.json",
         "../src/mcp/server.ts"
       ]
     }

@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { InMemoryTransport } from "@modelcontextprotocol/sdk/inMemory.js";
 import { describe, expect, it } from "vitest";
@@ -27,7 +27,7 @@ describe("demo agent isolation", () => {
     expect(Object.keys(cfg.mcpServers)).toEqual(["fulcrum"]);
     const s = cfg.mcpServers.fulcrum;
     expect(s?.command).toBe("node");
-    expect(s?.args).toEqual(["../node_modules/tsx/dist/cli.mjs", "../src/mcp/server.ts"]);
+    expect(s?.args).toEqual(["../node_modules/tsx/dist/cli.mjs", "--tsconfig", "../tsconfig.json", "../src/mcp/server.ts"]);
     expect(existsSync(join(ROOT, "node_modules/tsx/dist/cli.mjs"))).toBe(true);
     expect(s).not.toHaveProperty("env");
     expect(raw).not.toMatch(/TOKEN|KEY|SECRET/i);
@@ -77,8 +77,37 @@ describe("demo agent isolation", () => {
     expect(demo.sandbox?.failIfUnavailable).toBe(true);
     expect(demo.sandbox?.network?.allowLocalBinding).not.toBe(true);
     expect(demo.sandbox?.excludedCommands).toBeUndefined();
-    for (const e of [".claude", ".mcp.json", "CLAUDE.md", "node_modules", "package.json"]) expect(demo.sandbox?.filesystem?.denyWrite).toContain(e);
+    for (const e of [".claude", ".mcp.json", "CLAUDE.md", "node_modules", "package.json", "tsconfig.json", "jsconfig.json", ".npmrc", ".env", ".env.*"]) expect(demo.sandbox?.filesystem?.denyWrite).toContain(e);
     expect(demo.permissions.blockWritesOutsideWorkingDirectories).toBe(true);
+  });
+
+  it("AC-BYPASS a hostile demo/tsconfig.json cannot redirect imports when tsx is pinned to a clean tsconfig", () => {
+    const dir = mkdtempSync(join(tmpdir(), "fulcrum-tsconfig-"));
+    try {
+      const w = (rel: string, body: string): void => {
+        const f = join(dir, rel);
+        mkdirSync(dirname(f), { recursive: true });
+        writeFileSync(f, body);
+      };
+      w("package.json", '{"type":"module"}');
+      w("node_modules/fakepkg/package.json", '{"name":"fakepkg","main":"index.js"}');
+      w("node_modules/fakepkg/index.js", 'console.log("GOOD");\n');
+      w("evil.ts", 'console.log("EVIL");\n');
+      w("tsconfig.json", '{"compilerOptions":{}}');
+      w("entry.ts", 'import "fakepkg";\n');
+      w("demo/tsconfig.json", '{"compilerOptions":{"baseUrl":"..","paths":{"fakepkg":["evil.ts"]}}}');
+      const cli = join(ROOT, "node_modules/tsx/dist/cli.mjs");
+      const run = (args: string[]) =>
+        spawnSync("node", [cli, ...args, join(dir, "entry.ts")], { cwd: join(dir, "demo"), encoding: "utf8" });
+      const pinned = run(["--tsconfig", join(dir, "tsconfig.json")]);
+      expect(pinned.error).toBeUndefined();
+      expect(pinned.stdout).toContain("GOOD");
+      expect(pinned.stdout).not.toContain("EVIL");
+      // Control: without the pin the hostile tsconfig does redirect, so the test above is meaningful.
+      expect(run([]).stdout).toContain("EVIL");
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 
   it("AC-BYPASS demo agent cannot edit files (Fulcrum, guard and settings are tamper-proof)", () => {
