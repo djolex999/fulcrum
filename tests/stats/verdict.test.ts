@@ -24,7 +24,7 @@ const settings = find("Settings");
 
 function lookDate(ds: Dataset, plan: TestPlan, k: number): Date {
   const first = Math.min(...ds.users.filter((u) => u.abTest === plan.title && plan.arms.includes(u.flow)).map((u) => u.installAt.getTime()));
-  return new Date(first + k * 7 * DAY);
+  return new Date(Math.floor(first / DAY) * DAY + k * 7 * DAY);
 }
 
 describe("test plans", () => {
@@ -64,19 +64,17 @@ describe.skipIf(!real)("verdicts on real data", () => {
     expect(v.code).toBe("BEFORE_HORIZON");
     expect(v.lookK).toBe(2);
     expect(v.reasons.join(" ")).toMatch(/look 9/);
-    console.log("ONB look2", JSON.stringify(v));
   });
 
   it("AC-2 Onboarding is WINNER at week 9 on 60-day revenue", async () => {
     const d = await loadDataset();
     const v = judgeTest(onb, d, { asOf: lookDate(d, onb, 9) });
-    console.log("ONB look9", JSON.stringify(v));
     expect(v.verdict).toBe("WINNER");
     expect(v.winnerArm).toBe("onb_weekly");
     expect(v.goalMetric).toBe("rpi_60d");
     expect(v.goalSource).toBe("test_plan");
     expect(v.lookK).toBe(9);
-    expect(Math.abs(Math.abs(v.z ?? 0) - 4.49)).toBeLessThanOrEqual(0.1);
+    expect(Math.abs(Math.abs(v.z ?? 0) - 4.34)).toBeLessThanOrEqual(0.1);
     expect(Math.abs((v.boundary ?? 0) - 2.71)).toBeLessThanOrEqual(0.02);
     const t = testTimeline(onb, d, {});
     expect(t.firstCrossing?.k).toBe(9);
@@ -88,13 +86,26 @@ describe.skipIf(!real)("verdicts on real data", () => {
     const asOf = lookDate(d, settings, 6);
     expect(asOf.toISOString().slice(0, 10)).toBe("2026-08-16");
     const v = judgeTest(settings, d, { asOf });
-    console.log("SET look6", JSON.stringify(v));
     expect(v.lookK).toBe(6);
     expect(v.pNaive).not.toBeNull();
     expect(v.pNaive as number).toBeLessThan(0.05);
     expect(Math.abs(v.z as number)).toBeLessThan(v.boundary as number);
     expect(v.verdict).toBe("CONTINUE");
     expect(v.code).toBeUndefined();
+    expect(v.boundary as number).toBeCloseTo(3.32, 2);
+    expect(v.KSource).toBe("fallback");
+    // a date-only as_of (midnight UTC) from an agent lands on the same look
+    const dateOnly = judgeTest(settings, d, { asOf: new Date("2026-08-16") });
+    expect(dateOnly.lookK).toBe(6);
+    expect(dateOnly.pNaive as number).toBeLessThan(0.05);
+  });
+
+  it("look boundaries: one ms before look k is look k-1; dataEnd is capped at K", async () => {
+    const d = await loadDataset();
+    expect(judgeTest(settings, d, { asOf: new Date(lookDate(d, settings, 6).getTime() - 1) }).lookK).toBe(5);
+    expect(judgeTest(settings, d, { asOf: d.dataEnd }).lookK).toBe(15);
+    const v = judgeTest(settings, d, { asOf: d.dataEnd });
+    expect(v.reasons.join(" ")).toMatch(/\d+ installs fall after look 15/);
   });
 
   it("AC-SHOP payer-rate stop for Settings is refused as metric shopping", async () => {
@@ -114,7 +125,6 @@ describe.skipIf(!real)("verdicts on real data", () => {
   it("AC-1 Settings boundary never crossed for the declared winner", async () => {
     const d = await loadDataset();
     const t = testTimeline(settings, d, {});
-    console.log("SET timeline", JSON.stringify(t.looks.map((l) => [l.k, l.date, l.z?.toFixed(2), l.boundary.toFixed(2), l.crossed, l.leader, l.pNaive?.toFixed(3)])));
     expect(t.looks.length).toBeGreaterThan(5);
     expect(t.looks.some((l) => l.crossed && l.leader === "settings")).toBe(false);
   });
@@ -122,12 +132,20 @@ describe.skipIf(!real)("verdicts on real data", () => {
   it("AC-1 Settings declared winner is not supported at the end", async () => {
     const d = await loadDataset();
     const t = testTimeline(settings, d, {});
-    console.log("SET end", JSON.stringify(t.end));
     expect(t.end.leader).toBe("main_lifetime");
-    expect(t.end.effect).toBeLessThan(0);
+    expect(t.end.date).toBe(d.dataEnd.toISOString().slice(0, 10));
+    expect(t.end.arms.map((a) => a.arm)).toEqual(["main_lifetime", "settings"]);
+    expect(t.end.arms.every((a) => a.n > 1000)).toBe(true);
+    expect(Math.abs(t.end.effect - -0.68)).toBeLessThanOrEqual(0.02);
+    expect(Math.abs(t.end.pNaive - 0.5)).toBeLessThanOrEqual(0.01);
     const v = judgeTest(settings, d, {});
-    console.log("SET verdict now", JSON.stringify(v));
     expect(v.verdict).not.toBe("WINNER");
+    expect(v.leader).toBe("main_lifetime");
+    expect(Math.abs((v.pNaive as number) - 0.41)).toBeLessThanOrEqual(0.01);
+    // revenue to date is not the goal; shown for explanation only
+    const toDate = testTimeline(settings, d, { metric: "rpi" });
+    expect(toDate.end.leader).toBe("main_lifetime");
+    expect(Math.abs(toDate.end.pNaive - 0.067)).toBeLessThanOrEqual(0.003);
   });
 
   it("AC-8 every number has a source label", async () => {
@@ -177,12 +195,12 @@ describe.skipIf(!real)("verdicts on real data", () => {
     expect(t.metric).toBe("payer_rate");
     expect(t.firstCrossing).toBeNull();
     expect(t.looks.length).toBeGreaterThan(0);
+    expect(t.looks.some((l) => l.crossed)).toBe(false);
   });
 
   it("AC-11 Onboarding extra revenue is within 15% of the independent check", async () => {
     const d = await loadDataset();
     const m = extraRevenueFromShipping(onb, d, 9);
-    console.log("MONEY", JSON.stringify(m));
     expect(m.usd).toBeGreaterThanOrEqual(16_490);
     expect(m.usd).toBeLessThanOrEqual(22_310);
     expect(m.usersMoved).toBeGreaterThan(0);

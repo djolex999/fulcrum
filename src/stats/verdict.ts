@@ -53,7 +53,7 @@ export interface Timeline {
   KSource: "test_plan" | "fallback";
   looks: TimelineLook[];
   firstCrossing: { k: number; date: string; arm: string } | null;
-  end: { leader: string; effect: number; pNaive: number };
+  end: { date: string; leader: string; effect: number; pNaive: number; arms: { arm: string; n: number }[] };
   source: "export_csv";
 }
 
@@ -90,7 +90,9 @@ export function planData(plan: TestPlan, data: Dataset): PlanData {
   }
   let first = Infinity;
   for (const us of users) for (const u of us) first = Math.min(first, u.installAt.getTime());
-  return { users, firstInstall: first };
+  // Looks are day-aligned: anchor at 00:00:00 UTC of the first-install day, so a date-only as_of lands on the intended look.
+  const anchor = Math.floor(first / DAY_MS) * DAY_MS;
+  return { users, firstInstall: anchor };
 }
 
 export function lookEnd(pd: PlanData, k: number): Date {
@@ -214,7 +216,7 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
       ...empty,
       code: "INVALID_AS_OF",
       reasons: [
-        `as_of ${isoDate(cutoffRaw)} is outside the valid range ${isoDate(first)} to ${isoDate(data.dataEnd)} (first install to end of data).`,
+        `as_of ${isoDate(cutoffRaw)} is outside the valid range ${isoDate(first)} to ${isoDate(data.dataEnd)} (first install day to end of data).`,
       ],
     };
   }
@@ -261,6 +263,12 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
   if (!crossed && stats.p < 0.05) {
     reasons.push(`Naive p = ${stats.p.toFixed(3)} is under 0.05, but repeated looks inflate false wins; the boundary is what counts.`);
   }
+  if (fullLooks > K) {
+    const lastEnd = lookEnd(pd, K).getTime();
+    let after = 0;
+    for (const us of pd.users) for (const u of us) if (u.installAt.getTime() > lastEnd) after++;
+    reasons.push(`The data runs past the last planned look: ${after} installs fall after look ${K} (ends ${isoDate(cutoff)}) and are not in this verdict.`);
+  }
   if (KSource === "fallback") reasons.push(`The test plan gives no K; using the fallback K = ${FALLBACK_K}.`);
 
   return {
@@ -293,7 +301,8 @@ export function testTimeline(plan: TestPlan, data: Dataset, opts: { metric?: Met
     const end = lookEnd(pd, k);
     const s = lookStats(plan, pd, data, metric, end);
     const bound = boundary(c, K, k);
-    const crossed = s !== null && Math.abs(s.z) >= bound;
+    // A non-goal metric is shown for explanation only: no row is ever marked as crossed.
+    const crossed = isGoal && s !== null && Math.abs(s.z) >= bound;
     const look: TimelineLook = {
       k,
       date: isoDate(end),
@@ -304,7 +313,7 @@ export function testTimeline(plan: TestPlan, data: Dataset, opts: { metric?: Met
       pNaive: s?.p ?? null,
     };
     looks.push(look);
-    if (isGoal && crossed && firstCrossing === null && s !== null) {
+    if (crossed && firstCrossing === null && s !== null) {
       firstCrossing = { k, date: look.date, arm: s.leader };
     }
   }
@@ -318,7 +327,13 @@ export function testTimeline(plan: TestPlan, data: Dataset, opts: { metric?: Met
     KSource,
     looks,
     firstCrossing,
-    end: { leader: endStats.leader, effect: endStats.effect, pNaive: endStats.p },
+    end: {
+      date: isoDate(data.dataEnd),
+      leader: endStats.leader,
+      effect: endStats.effect,
+      pNaive: endStats.p,
+      arms: endStats.arms.map((a) => ({ arm: a.arm, n: a.n })),
+    },
     source: "export_csv",
   };
 }
