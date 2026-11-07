@@ -26,21 +26,19 @@ The result is shipped "winners" that never actually won.
 ## Architecture
 
 ```mermaid
-flowchart LR
-  A["AI agent<br/>(Claude Code, sandboxed)<br/>no Adapty tool, no CLI, no token"] -- MCP stdio --> F
-  subgraph F["Fulcrum (holds ADAPTY_TOKEN)"]
-    direction TB
-    T["Tools: list_tests, judge_test, test_timeline,<br/>find_signals, request_stop, propose_test, request_status"]
-    V["Verdict: declared goal, horizon,<br/>c·√(K/k) boundary, as_of replay"]
-    P["Policy: fulcrum.policy.json"]
-    G["Gate: pending action + ledger"]
-    T --> V --> G
-    T --> P --> G
+flowchart TB
+  A["AI agent<br/>no tool, no CLI, no token"] -->|asks over MCP| F
+  subgraph F["Fulcrum: holds the only token"]
+    direction LR
+    V["Verdict<br/>declared goal + boundary"] --> G["Gate<br/>pending + ledger"]
+    P["Policy<br/>fulcrum.policy.json"] --> G
   end
-  H["Human approver<br/>(local approval page)"] -- Approve / Reject --> G
-  G -- "only after approval" --> C["Adapty CLI"] --> AD[("Adapty")]
-  D[("Offline CSV export<br/>synthetic Lumen data")] --> V
+  D[("CSV export<br/>synthetic data")] --> V
+  H["Human approver"] -->|approves| G
+  G -->|only after approval| AD[("Adapty<br/>via CLI")]
 ```
+
+The agent's tools: `list_tests`, `judge_test`, `test_timeline`, `find_signals`, `request_stop`, `propose_test`, `request_status`. None of them writes; a write happens only after the gate gets a human approval.
 
 ## Run it
 
