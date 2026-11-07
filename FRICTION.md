@@ -4,3 +4,4 @@ Rough edges hit in Adapty tooling during the hackathon. One line each: date | su
 
 - 2026-11-07 | CLI 0.18.0 | `ab-tests list` shows only flow tests by default; paywall tests need `--type paywall`. Easy to miss tests. | Show both types by default, or print a hint like "showing flow tests; use --type paywall".
 - 2026-11-07 | CLI 0.18.0 | CLI auth can use the `ADAPTY_TOKEN` env var (README), but `adapty auth login --help` does not mention it. | Mention `ADAPTY_TOKEN` in `auth --help` and `auth login --help`.
+- 2026-11-07 | CLI 0.18.0 `ab-tests get` | A test's `goal` is free text ("Earlier test - stopped with a winner"), so an agent cannot tell which metric a test was meant to be judged on; we had to declare goals in our own test-plans.json. | Add a structured goal field (metric, horizon, planned looks) to A/B tests.

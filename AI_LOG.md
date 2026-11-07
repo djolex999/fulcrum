@@ -126,3 +126,13 @@ One entry per build phase, written at the end of `phase-checkpoint` in Djordje's
 - **Open issues:**
 - **Events logged this phase:** N (from .ai-log/events.jsonl)
 -->
+
+### Phases 1–2: the only door, and real verdicts
+
+- **Time:** 10:10 to 16:40 (Europe/Belgrade), Saturday 7 Nov.
+- **Goal:** Phase 1, the only door between the agent and Adapty (AC-BYPASS, AC-TOKEN, AC-4, AC-5, AC-7, AC-10, AC-12). Phase 2, verdicts on the declared goal with a calibrated boundary (AC-1, AC-2, AC-PEEK, AC-SHOP, AC-CALIB, AC-8, AC-9, AC-11).
+- **What AI produced:** the MCP server with five tools, the token kept inside Fulcrum, the approval gate and ledger, the human-only approval page, the sandboxed demo agent; the CSV loader, revenue per install, the boundary and its simulation, the verdict engine, and the real verdicts behind the tools. In my words: "the agent has no token, it only has requests"; "no user has done 60 days, until that is accomplished it's always not yet"; "Fulcrum adds it in code, Adapty's MCP is just a prompt."
+- **What I changed or rejected, and why:** nothing, AI built it. Decisions I made along the way: the Settings scene moved from 2 Sep to 16 Aug after the independent check, the positioning narrowed to "the only door" (no dashboards), and the activity log stays private.
+- **Verification:** 140 tests pass (typecheck clean). Every task had an independent review (Sonnet, Fable for the gate, the MCP server, the verdicts and the wiring); fix rounds are logged above. Pitch numbers re-derived independently. Not yet verified by hand: the live throwaway stop and the sandbox in `demo/`.
+- **Open issues:** AC-LOOP (`propose_test`) and AC-POLICY are not built; the live throwaway run and the manual check in `demo/` are still to do.
+- **Events logged this phase:** 58 (from 13:58, when the activity hook started logging).

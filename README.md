@@ -16,8 +16,8 @@ The result is shipped "winners" that never actually won.
 
 ## How it works
 
-- **Approval gate:** to be written during the event.
-- **Verdict engine:** to be written during the event.
+- **Approval gate:** the agent has no token, it only has requests. A request becomes pending only if the statistics say there is a winner for that exact arm, and only a human clicking Approve on the local page makes Fulcrum stop the test. Adapty's own MCP asks the model to confirm before a stop, which is just a prompt; Fulcrum adds the rule in code, plus statistics, a human approver and a ledger of every attempt.
+- **Verdict engine:** a test is judged only on its declared goal. For Onboarding that is 60-day revenue per install, so until users have been in the app for 60 days the answer is always "not yet"; the first week anyone qualifies is week 9, and that is where it crosses the boundary.
 - **Agent loop:** to be written during the event.
 - **Stopping boundaries:** to be written during the event.
 
