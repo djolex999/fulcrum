@@ -56,7 +56,7 @@ def check_cmd(cmd, depth=0):
     if depth > 3:
         deny("command nesting too deep to check")
     toks = tokens(cmd)
-    mentions_adapty = "adapty" in cmd
+    mentions_adapty = "adapty" in cmd or "adapty" in "".join(toks)
     for seg in segments(toks):
         # Nested shells: bash -c "...", sh -c, eval "...", and any quoted token with spaces
         for t in seg:
@@ -75,7 +75,13 @@ def check_cmd(cmd, depth=0):
                          "Writes go through the Fulcrum approval gate, or a human runs them.")
                 if "apps" in words and "get" in words:
                     deny("`adapty apps get` returns the app secret key and is blocked.")
-        # Dynamic command names next to adapty: $CMD, ${X}, eval, xargs, a pipe into sh/bash
+        # A command word built from expansion ($CMD, ${X}, $(...)) or ANSI-C quoting cannot be checked
+        cw = [t for t in seg if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", t)]
+        if cw and (cw[0].startswith("$") or "${" in cw[0] or "$(" in cw[0]):
+            deny("the command word " + cw[0] + " comes from an expansion and cannot be checked.")
+        if any("$\x27" in t or t.startswith("$\x27") for t in seg) or "$\x27" in cmd:
+            deny("ANSI-C quoting ($\x27...\x27) cannot be checked.")
+        # Dynamic command names next to adapty: eval, xargs, a pipe into sh/bash
         if mentions_adapty:
             cmd_words = [t for t in seg if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", t)]
             head = cmd_words[0] if cmd_words else ""
@@ -87,6 +93,8 @@ def check_cmd(cmd, depth=0):
         safe = first in ENV_SAFE_FIRST or (first == "git" and len(seg) > 1 and seg[1] in ENV_SAFE_GIT)
         if not safe:
             for t in seg:
+                if re.search(r"(?:^|/|[\x22\x27{,])\.e", t) and re.search(r"[{$\\]", t):
+                    deny("the token " + t + " mixes .e with shell expansion and could reach .env.")
                 if ENV_ANY.search(t):
                     deny("access to " + t + " is blocked (secrets live there).")
                 base = os.path.basename(t)

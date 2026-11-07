@@ -35,6 +35,13 @@ expect deny  "eval with adapty"                  Bash "$(bash_cmd 'eval "ada""pt
 expect deny  "xargs with adapty"                 Bash "$(bash_cmd 'echo stop | xargs adapty ab-tests')"
 expect deny  "pipe into sh with adapty"          Bash "$(bash_cmd 'echo "adapty ab-tests stop X" | sh')"
 expect allow "read with \$APP variable"          Bash "$(bash_cmd 'adapty ab-tests list --app $APP --json')"
+# Parser tricks (review round 3)
+expect deny  "split quotes ad''apty"             Bash "$(bash_cmd "ad''apty ab-tests stop X")"
+expect deny  "ANSI-C \$'...' command"            Bash "$(bash_cmd "\$'\\x61dapty' ab-tests stop X")"
+expect deny  "\${X} as command word"             Bash "$(bash_cmd 'X=adapty; ${X} ab-tests stop Y')"
+expect deny  "\$(...) as command word"           Bash "$(bash_cmd '$(echo adapty) ab-tests stop Y')"
+expect deny  ".e{n,}v brace trick"               Bash "$(bash_cmd "cat .e{n,}v")"
+expect deny  "ANSI-C .env"                       Bash "$(bash_cmd "cat \$'\\x2eenv'")"
 # .env: denied through Bash and file tools, .env.example allowed
 expect deny  "glob .e* in Bash"                  Bash "$(bash_cmd "cat .e*")"
 expect deny  "glob .??v in Bash"                 Bash "$(bash_cmd "head .??v")"

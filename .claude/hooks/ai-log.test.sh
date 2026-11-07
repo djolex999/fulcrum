@@ -33,6 +33,9 @@ line="$(tail -1 "$LOG")"
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ADAPTY_TOKEN=\"qv1abc\" x && MY_KEY='"'"'qv2 with space'"'"' y && curl -H \"x-api-key: \\\"qv3\\\"\" --token \"qv4\""},"tool_response":{}}' | "$HOOK"
 line="$(tail -1 "$LOG")"
 ! grep -qE 'qv1abc|qv2|qv3|qv4' <<<"$line"; check "quoted values are redacted" $?
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ADAPTY_TOKEN=\"qa1 qa2\" x && MY_KEY=qb1\"qb2\"qb3 y && API_TOKEN=qc1\\ qc2 z"},"tool_response":{}}' | "$HOOK"
+line="$(tail -1 "$LOG")"
+! grep -qE 'qa1|qa2|qb1|qb2|qb3|qc1|qc2' <<<"$line"; check "spaces in quotes, glued parts and escaped spaces are redacted" $?
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"adapty ab-tests list --app f8711513-c780-42b2-b6da-6c44094f3867"},"tool_response":{}}' | "$HOOK"
 line="$(tail -1 "$LOG")"
 grep -q 'f8711513-c780-42b2-b6da-6c44094f3867' <<<"$line"; check "UUIDs (app ids) are kept" $?
