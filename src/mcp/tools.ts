@@ -2,7 +2,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AdaptyCli } from "../adapty/cli.js";
 import type { AbTestDetail } from "../adapty/types.js";
+import { AdaptyCliError } from "../adapty/cli.js";
 import type { createGate, Judge } from "../gate/pending.js";
+import { goalMetricOf, type TestPlan } from "../stats/plans.js";
+import { flowOfArm, planForTitle } from "./engine.js";
+import { ToolError } from "./errors.js";
 
 type Gate = ReturnType<typeof createGate>;
 
@@ -16,15 +20,7 @@ export type JudgeFn = (
 
 export type TimelineFn = (testId: string, opts: { metric?: string }) => Promise<Record<string, unknown>>;
 
-export class ToolError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-  ) {
-    super(message);
-    this.name = "ToolError";
-  }
-}
+export { ToolError };
 
 /** Until the verdict engine exists nothing can be approvable: never WINNER. */
 export const placeholderJudge: JudgeFn = async () => ({
@@ -41,21 +37,31 @@ export interface ToolDeps {
   gate: Gate;
   judge: JudgeFn;
   timeline: TimelineFn;
+  /** Test plans, joined to Adapty tests by title (list_tests goal and horizon; arm mapping check). */
+  plans?: readonly TestPlan[];
   log?: (message: string) => void;
   scrub?: (text: string) => string;
 }
 
 function parseAsOf(raw: string | undefined): Date | undefined {
   if (raw === undefined) return undefined;
-  const d = /^\d{4}-\d{2}-\d{2}$/.test(raw) ? new Date(`${raw}T00:00:00Z`) : new Date(Number.NaN);
-  if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== raw) {
-    throw new ToolError("INVALID_AS_OF", "as_of must be a real calendar date, YYYY-MM-DD");
+  const bad = (): ToolError => new ToolError("INVALID_AS_OF", "as_of must be a real date: YYYY-MM-DD or a full ISO timestamp");
+  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) {
+    // Looks are day-aligned at 00:00:00Z, so a date-only as_of lands on the right look.
+    const d = new Date(`${raw}T00:00:00Z`);
+    if (Number.isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== raw) throw bad();
+    return d;
   }
-  return d;
+  if (/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}(:\d{2}(\.\d+)?)?(Z|[+-]\d{2}:\d{2})$/.test(raw)) {
+    const d = new Date(raw);
+    if (!Number.isNaN(d.getTime())) return d;
+  }
+  throw bad();
 }
 
 export function registerTools(server: McpServer, deps: ToolDeps): void {
   const { cli, gate, judge, timeline } = deps;
+  const plans = deps.plans ?? [];
   const log = deps.log ?? (() => {});
   const scrub = deps.scrub ?? ((s: string) => s);
 
@@ -83,8 +89,9 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
           return fail(err.code, err.message);
         }
         const msg = err instanceof Error ? err.message : String(err);
-        log(`${name} error ADAPTY_UNAVAILABLE: ${msg}`);
-        return fail("ADAPTY_UNAVAILABLE", msg);
+        const code = err instanceof AdaptyCliError ? "ADAPTY_UNAVAILABLE" : "INTERNAL";
+        log(`${name} error ${code}: ${scrub(msg)}`);
+        return fail(code, msg);
       }
     });
   }
@@ -100,14 +107,17 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   tool("list_tests", "List the app's Adapty A/B tests.", {}, async () => {
     const tests = await cli.listTests();
     return {
-      tests: tests.map((t) => ({
-        test_id: t.abTestId,
-        title: t.title,
-        state: t.state,
-        placement: t.placementTitle,
-        goal_metric: null, // joined from the test plans in Task 9b
-        horizon_days: null,
-      })),
+      tests: tests.map((t) => {
+        const plan = planForTitle(plans, t.title);
+        return {
+          test_id: t.abTestId,
+          title: t.title,
+          state: t.state,
+          placement: t.placementTitle,
+          goal_metric: plan ? goalMetricOf(plan) : null,
+          horizon_days: plan ? plan.horizonDays : null,
+        };
+      }),
     };
   });
 
@@ -157,10 +167,12 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
       if (test.state !== "live") {
         throw new ToolError("NOT_LIVE", `test ${a.test_id} is ${test.state}, only live tests can be stopped`);
       }
-      // Seam for Task 9b: map the Adapty arm id to its CSV flow here. For now the arm id passes through.
       if (!test.arms.some((arm) => arm.armId === a.winner_arm_id)) {
         throw new ToolError("UNKNOWN_ARM", `arm ${a.winner_arm_id} is not part of test ${a.test_id}`);
       }
+      // With a plan, the requested arm must also map to a CSV flow through its Adapty flow name.
+      const plan = planForTitle(plans, test.title);
+      if (plan) flowOfArm(plan, test, a.winner_arm_id);
       const r = await gate.requestStop({
         testId: a.test_id,
         winnerArmId: a.winner_arm_id,
@@ -174,17 +186,33 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
             action_id: r.actionId,
             status: "blocked",
             verdict: r.verdict,
-            reason: "request in progress, re-check request_status",
+            reason: "request in progress, retry request_stop in a moment",
           };
         }
         throw new ToolError("DUPLICATE_PENDING", `action ${r.actionId} is already pending for this test`);
       }
+      // Same shared judge, same data: the numbers behind the decision, so a block shows its boundary.
+      const detail = await judge(a.test_id, { ...(asOf ? { asOf } : {}), metric: a.metric }).catch(() => null);
       return {
         action_id: r.actionId,
         status: r.status,
         verdict: r.verdict,
         reason: r.reason,
         ...(r.code ? { code: r.code } : {}),
+        ...(detail
+          ? {
+              evidence: {
+                goal_metric: detail.goal_metric,
+                look_k: detail.look_k,
+                K: detail.K,
+                z: detail.z,
+                boundary: detail.boundary,
+                effect: detail.effect,
+                p_naive: detail.p_naive,
+                source: detail.source,
+              },
+            }
+          : {}),
       };
     },
   );

@@ -141,7 +141,7 @@ describe("Fulcrum MCP server", () => {
     const second = await call("request_stop", args);
     expect(second.isError).toBe(false);
     expect(second.json.status).toBe("blocked");
-    expect(String(second.json.reason)).toContain("request in progress, re-check request_status");
+    expect(String(second.json.reason)).toContain("request in progress, retry request_stop in a moment");
     release();
     expect((await first).json.status).toBe("pending");
   });

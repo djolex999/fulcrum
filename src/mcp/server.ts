@@ -8,7 +8,10 @@ import { createLedger } from "../gate/ledger.js";
 import { createGate } from "../gate/pending.js";
 import { startApprovalPage } from "../ui/approve.js";
 import { createLogger } from "./log.js";
-import { placeholderJudge, placeholderTimeline, registerTools, type ToolDeps } from "./tools.js";
+import { loadDataset } from "../data/csv.js";
+import { loadPlans } from "../stats/plans.js";
+import { createEngine } from "./engine.js";
+import { registerTools, type ToolDeps } from "./tools.js";
 
 export function buildServer(deps: ToolDeps): McpServer {
   const server = new McpServer({ name: "fulcrum", version: "0.1.0" });
@@ -23,9 +26,11 @@ export async function main(opts: { startApprovalPage?: (gate: Gate, port: number
   const { log, scrub } = createLogger(config.token);
   const cli = createAdaptyCli({ appId: config.appId, token: config.token });
   const ledger = createLedger(config.ledgerPath);
-  // Placeholder judge until the verdict engine lands: it can never return WINNER.
-  const gate = createGate({ cli, ledger, judge: placeholderJudge });
-  const server = buildServer({ cli, gate, judge: placeholderJudge, timeline: placeholderTimeline, log, scrub });
+  // One engine, one judge: the gate and the tools share it so they cannot disagree.
+  const plans = loadPlans();
+  const { judge, timeline } = createEngine({ cli, plans, loadData: () => loadDataset(config.dataDir) });
+  const gate = createGate({ cli, ledger, judge });
+  const server = buildServer({ cli, gate, judge, timeline, plans, log, scrub });
   // The human approval page: the only path to approve a write. Injectable for tests.
   const startPage = opts.startApprovalPage ?? ((g: Gate, p: number) => startApprovalPage(g, p, ledger, log));
   startPage(gate, config.port);

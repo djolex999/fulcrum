@@ -1,14 +1,28 @@
 [
   {
     "title": "Onboarding: annual trial vs weekly first",
-    "arms": ["onb_trial", "onb_weekly"],
+    "arms": [
+      "onb_trial",
+      "onb_weekly"
+    ],
+    "adaptyFlowNames": [
+      "Onboarding - Annual trial",
+      "Onboarding - Weekly first"
+    ],
     "goal": "rpi",
     "horizonDays": 60,
     "K": 15
   },
   {
     "title": "Settings: upgrade vs lifetime anchor",
-    "arms": ["main_lifetime", "settings"],
+    "arms": [
+      "main_lifetime",
+      "settings"
+    ],
+    "adaptyFlowNames": [
+      "Main - Lifetime anchor",
+      "Settings - Upgrade"
+    ],
     "goal": "rpi",
     "horizonDays": 30
   }

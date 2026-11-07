@@ -7,6 +7,8 @@ export const FALLBACK_K = 15;
 export interface TestPlan {
   title: string;
   arms: [string, string];
+  /** Adapty flow_name of each arm, same order as `arms`. Needed to map Adapty arm ids to CSV flows. */
+  adaptyFlowNames?: [string, string];
   goal: "rpi";
   /** null = revenue to date (no fixed horizon). */
   horizonDays: number | null;
@@ -41,6 +43,10 @@ function parsePlan(raw: unknown, i: number): TestPlan {
   if (!Array.isArray(arms) || arms.length !== 2 || !arms.every((a) => typeof a === "string" && a !== "")) {
     throw bad(`"${r.title}" needs exactly two arm names`);
   }
+  const names = r.adaptyFlowNames;
+  if (names !== undefined && !(Array.isArray(names) && names.length === 2 && names.every((n) => typeof n === "string" && n !== ""))) {
+    throw bad(`"${r.title}" adaptyFlowNames needs exactly two names`);
+  }
   if (r.goal !== "rpi") throw bad(`"${r.title}" goal must be "rpi"`);
   const h = r.horizonDays;
   if (h !== null && !(typeof h === "number" && Number.isInteger(h) && h > 0)) {
@@ -51,6 +57,7 @@ function parsePlan(raw: unknown, i: number): TestPlan {
     throw bad(`"${r.title}" K must be an integer >= 1`);
   }
   const plan: TestPlan = { title: r.title, arms: [arms[0] as string, arms[1] as string], goal: "rpi", horizonDays: h };
+  if (names !== undefined) plan.adaptyFlowNames = [names[0] as string, names[1] as string];
   if (K !== undefined) plan.K = K;
   goalMetricOf(plan);
   return plan;
