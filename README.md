@@ -18,6 +18,10 @@ Growth teams running paywall and onboarding A/B tests routinely:
 
 The result is shipped "winners" that never actually won.
 
+## Why this matters for Adapty
+
+Adapty just gave agents write access: its MCP server has 27 write tools, and before a start or stop it asks the model to confirm. Adapty also earns a share of its customers' revenue, so a wrong test decision costs Adapty too. Fulcrum is the policy layer that makes turning on agent writes safe: declared goals, a calibrated stopping boundary, policy as code and a human approval, in front of the CLI. It speaks MCP, so it works with any MCP client, not one agent.
+
 ## How it works
 
 - **Approval gate:** the agent has no token, it only has requests. A request becomes pending only if the statistics say there is a winner for that exact arm, and only a human clicking Approve on the local page makes Fulcrum stop the test. Adapty's own MCP asks the model to confirm before a stop, which is just a prompt; Fulcrum adds the rule in code, plus statistics, a human approver and a ledger of every attempt.

@@ -24,6 +24,7 @@ The refusals are the point of the demo, not the approval button. Steps 1 to 4 ar
    Expect: `request_stop` returns `pending`. The human approves on the approval page; the agent cannot. Fulcrum stops the test in Adapty; show `adapty ab-tests get <id> --app … --json` on the second screen.
 6. **The next test: policy plus draft.** Prompt: "Users keep hitting ai_limit_reached; find what drives payment and propose a test."
    Expect: `find_signals` (users with 5+ AI edits on day one pay about twice as often), then `propose_test` on `ai_limit_reached` comes back `pending` with `policy_check` (fulcrum.policy.json: allowed placement, traffic cap, no live test, daily limit; the approvers), `existing_draft` (the draft "AI limit: Pro vs 3 plans" on that placement), `creates` (draft only) and the declared goal. Line: "The agent can propose, but policy decides what it may propose, and it can never start a test."
+7. **Close: the platform line (no prompt).** "Adapty just gave agents 27 write tools, and before a stop they ask the model to confirm. Adapty earns a share of its customers' revenue, so a wrong test decision costs Adapty too. Fulcrum is the policy layer that makes switching on agent writes safe, for any MCP client."
 
 ## Red-team beat (optional, or the opening of Q&A)
 
