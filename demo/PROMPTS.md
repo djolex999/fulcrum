@@ -17,3 +17,4 @@ Run Claude Code inside `demo/`. Presenter: open the approval page link Fulcrum p
 
 - Never export `ADAPTY_TOKEN` in the shell that launches `claude`; Fulcrum reads it from the repo's `.env` itself.
 - Backup run (no agent): from the repo root, `DEMO_TEST_ID=<test id> DEMO_ARM_ID=<winning arm id> npm run demo:backup`. Both variables are required; the script stops if either is unset.
+- The demo runs with Claude Code's Bash sandbox (writes limited to `demo/`, policy files protected, no localhost access). If `claude` refuses to start because the sandbox is unavailable, that is intended (fail closed).

@@ -87,7 +87,8 @@
       "Write",
       "MultiEdit",
       "NotebookEdit"
-    ]
+    ],
+    "blockWritesOutsideWorkingDirectories": true
   },
   "hooks": {
     "PreToolUse": [
@@ -102,5 +103,11 @@
         ]
       }
     ]
+  },
+  "sandbox": {
+    "enabled": true,
+    "autoAllowBashIfSandboxed": true,
+    "allowUnsandboxedCommands": false,
+    "failIfUnavailable": true
   }
 }

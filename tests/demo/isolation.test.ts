@@ -66,6 +66,19 @@ describe("demo agent isolation", () => {
     }
   });
 
+  it("AC-BYPASS demo sandbox is enabled and cannot be escaped", () => {
+    const demo = JSON.parse(read("demo/.claude/settings.json")) as {
+      sandbox?: { enabled?: boolean; allowUnsandboxedCommands?: boolean; failIfUnavailable?: boolean; excludedCommands?: unknown; network?: { allowLocalBinding?: boolean } };
+      permissions: { blockWritesOutsideWorkingDirectories?: boolean };
+    };
+    expect(demo.sandbox?.enabled).toBe(true);
+    expect(demo.sandbox?.allowUnsandboxedCommands).toBe(false);
+    expect(demo.sandbox?.failIfUnavailable).toBe(true);
+    expect(demo.sandbox?.network?.allowLocalBinding).not.toBe(true);
+    expect(demo.sandbox?.excludedCommands).toBeUndefined();
+    expect(demo.permissions.blockWritesOutsideWorkingDirectories).toBe(true);
+  });
+
   it("AC-BYPASS demo agent cannot edit files (Fulcrum, guard and settings are tamper-proof)", () => {
     const demo = JSON.parse(read("demo/.claude/settings.json")) as Settings;
     for (const t of ["Edit", "Write", "MultiEdit", "NotebookEdit"]) expect(demo.permissions.deny).toContain(t);

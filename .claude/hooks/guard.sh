@@ -62,6 +62,8 @@ WRITE_SHAPE = re.compile(r"(?<![0-9&])>(?!&|\s*/dev/null)|(?<![A-Za-z0-9_./-])(t
 
 def check_demo_tamper(cmd):
     outside = re.search(r"\.\./|\.\.(?=\s|$|[;&|)])", cmd) or (REPO_ROOT and REPO_ROOT in cmd)
+    if re.search(r"\.claude|\.mcp\.json|CLAUDE\.md", cmd) and WRITE_SHAPE.search(cmd):
+        deny("the demo agent may not modify its own policy files (.claude, .mcp.json, CLAUDE.md).")
     if outside and WRITE_SHAPE.search(cmd):
         deny("the demo agent may not write outside demo/ (Fulcrum code, guard and settings are off limits).")
 
