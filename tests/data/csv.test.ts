@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { gzipSync } from "node:zlib";
 import { afterEach, describe, expect, it } from "vitest";
-import { DEFAULT_DATA_DIR, loadDataset } from "../../src/data/csv.js";
+import { DEFAULT_DATA_DIR, loadDataset, parseCsv } from "../../src/data/csv.js";
 
 const USERS_HEADER =
   "user_id,platform,country,device,os,locale,install_at,acquisition_channel,onboarding_goal,ai_edits_first_day,photos_imported,push_opt_in,app_version,placement,flow,ab_test";
@@ -16,7 +16,59 @@ afterEach(() => {
   dir = undefined;
 });
 
+function writeFixture(d: string, users: string, txns: string): void {
+  writeFileSync(join(d, "users.csv.gz"), gzipSync(users));
+  writeFileSync(join(d, "transactions.csv.gz"), gzipSync(txns));
+}
+
+describe("parseCsv", () => {
+  it("handles CRLF, trailing newline, trailing empty field and escaped quotes", () => {
+    expect(parseCsv('a,b,\r\n"x ""q"" y","1,2",\r\nlast,,\r\n')).toEqual([
+      ["a", "b", ""],
+      ['x "q" y', "1,2", ""],
+      ["last", "", ""],
+    ]);
+  });
+  it("keeps a final row with no trailing newline and ends with an empty field", () => {
+    expect(parseCsv("a,b\n1,")).toEqual([["a", "b"], ["1", ""]]);
+  });
+});
+
 describe("loadDataset", () => {
+  it("loads reordered headers correctly", async () => {
+    dir = mkdtempSync(join(tmpdir(), "fulcrum-csv-"));
+    writeFixture(
+      dir,
+      "ab_test,flow,install_at,ai_edits_first_day,user_id\nT,f1,2026-08-04T00:00:00Z,2,u9",
+      "refunded_at,price_usd,purchased_at,user_id\n,9.5,2026-08-05T00:00:00Z,u9",
+    );
+    const ds = await loadDataset(dir);
+    expect(ds.users[0]).toEqual({ userId: "u9", installAt: new Date("2026-08-04T00:00:00Z"), flow: "f1", abTest: "T", aiEditsFirstDay: 2 });
+    expect(ds.txns[0]).toEqual({ userId: "u9", purchasedAt: new Date("2026-08-05T00:00:00Z"), priceUsd: 9.5, refundedAt: null });
+  });
+
+  it("throws on invalid price_usd with column and row, not the whole row", async () => {
+    dir = mkdtempSync(join(tmpdir(), "fulcrum-csv-"));
+    writeFixture(
+      dir,
+      "user_id,install_at,flow,ab_test,ai_edits_first_day\nu1,2026-08-04T00:00:00Z,f,T,0",
+      "user_id,purchased_at,price_usd,refunded_at\nu1,2026-08-05T00:00:00Z,abc,",
+    );
+    await expect(loadDataset(dir)).rejects.toThrow(/price_usd at data row 1/);
+  });
+
+  it("does not cache a failed load", async () => {
+    dir = mkdtempSync(join(tmpdir(), "fulcrum-csv-"));
+    await expect(loadDataset(dir)).rejects.toThrow();
+    writeFixture(
+      dir,
+      "user_id,install_at,flow,ab_test,ai_edits_first_day\nu1,2026-08-04T00:00:00Z,f,T,0",
+      "user_id,purchased_at,price_usd,refunded_at\nu1,2026-08-05T00:00:00Z,1,",
+    );
+    const ds = await loadDataset(dir);
+    expect(ds.users).toHaveLength(1);
+  });
+
   it("parses quoted fields", async () => {
     dir = mkdtempSync(join(tmpdir(), "fulcrum-csv-"));
     const users = [

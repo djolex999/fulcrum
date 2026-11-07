@@ -78,6 +78,13 @@ function toDate(value: string | undefined, what: string): Date {
   return d;
 }
 
+function toNumber(value: string | undefined, what: string, rowNumber: number): number {
+  if (value === undefined || value === "") return 0;
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw new Error(`Invalid number for ${what} at data row ${rowNumber}: "${value.slice(0, 40)}"`);
+  return n;
+}
+
 async function load(dir: string): Promise<Dataset> {
   const [u, t] = await Promise.all([
     readTable(join(dir, "users.csv.gz")),
@@ -88,12 +95,12 @@ async function load(dir: string): Promise<Dataset> {
   const uFlow = u.col("flow");
   const uTest = u.col("ab_test");
   const uEdits = u.col("ai_edits_first_day");
-  const users: User[] = u.rows.map((r) => ({
+  const users: User[] = u.rows.map((r, i) => ({
     userId: r[uId] ?? "",
     installAt: toDate(r[uInstall], "install_at"),
     flow: r[uFlow] ?? "",
     abTest: r[uTest] ?? "",
-    aiEditsFirstDay: Number(r[uEdits] || 0),
+    aiEditsFirstDay: toNumber(r[uEdits], "ai_edits_first_day", i + 1),
   }));
 
   const tId = t.col("user_id");
@@ -101,12 +108,12 @@ async function load(dir: string): Promise<Dataset> {
   const tPrice = t.col("price_usd");
   const tRefund = t.col("refunded_at");
   let end = 0;
-  const txns: Txn[] = t.rows.map((r) => {
+  const txns: Txn[] = t.rows.map((r, i) => {
     const purchasedAt = toDate(r[tBought], "purchased_at");
     const refundRaw = r[tRefund] ?? "";
     const refundedAt = refundRaw === "" ? null : toDate(refundRaw, "refunded_at");
     end = Math.max(end, purchasedAt.getTime(), refundedAt?.getTime() ?? 0);
-    return { userId: r[tId] ?? "", purchasedAt, priceUsd: Number(r[tPrice] || 0), refundedAt };
+    return { userId: r[tId] ?? "", purchasedAt, priceUsd: toNumber(r[tPrice], "price_usd", i + 1), refundedAt };
   });
   return { users, txns, dataEnd: new Date(end) };
 }
