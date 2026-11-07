@@ -30,6 +30,9 @@ line="$(tail -1 "$LOG")"
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"MY_SECRET=s3cr3tv4lue x --password pw1234 && echo Zx9kQ2mP7vL4nR8tW1yB6cD3fG5hJ0sA"},"tool_response":{}}' | "$HOOK"
 line="$(tail -1 "$LOG")"
 ! grep -qE 's3cr3tv4lue|pw1234|Zx9kQ2mP7vL4nR8tW1yB6cD3fG5hJ0sA' <<<"$line"; check "NAME=value, --password and long random strings are redacted" $?
+printf '%s' '{"tool_name":"Bash","tool_input":{"command":"ADAPTY_TOKEN=\"qv1abc\" x && MY_KEY='"'"'qv2 with space'"'"' y && curl -H \"x-api-key: \\\"qv3\\\"\" --token \"qv4\""},"tool_response":{}}' | "$HOOK"
+line="$(tail -1 "$LOG")"
+! grep -qE 'qv1abc|qv2|qv3|qv4' <<<"$line"; check "quoted values are redacted" $?
 printf '%s' '{"tool_name":"Bash","tool_input":{"command":"adapty ab-tests list --app f8711513-c780-42b2-b6da-6c44094f3867"},"tool_response":{}}' | "$HOOK"
 line="$(tail -1 "$LOG")"
 grep -q 'f8711513-c780-42b2-b6da-6c44094f3867' <<<"$line"; check "UUIDs (app ids) are kept" $?

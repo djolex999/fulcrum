@@ -29,7 +29,19 @@ expect deny  "adapty apps get (secret key)"      Bash "$(bash_cmd "adapty apps g
 expect allow "adapty ab-tests list"              Bash "$(bash_cmd "adapty ab-tests list --app $A --json")"
 expect allow "adapty ab-tests metrics total"     Bash "$(bash_cmd "adapty ab-tests metrics total X --app $A")"
 expect allow "adapty ab-tests stop --help"       Bash "$(bash_cmd "adapty ab-tests stop --help")"
+# Dynamic command names next to adapty (review round 2)
+expect deny  "\$CMD with adapty"                 Bash "$(bash_cmd 'C=adapty; $C ab-tests stop X')"
+expect deny  "eval with adapty"                  Bash "$(bash_cmd 'eval "ada""pty ab-tests stop X"')"
+expect deny  "xargs with adapty"                 Bash "$(bash_cmd 'echo stop | xargs adapty ab-tests')"
+expect deny  "pipe into sh with adapty"          Bash "$(bash_cmd 'echo "adapty ab-tests stop X" | sh')"
+expect allow "read with \$APP variable"          Bash "$(bash_cmd 'adapty ab-tests list --app $APP --json')"
 # .env: denied through Bash and file tools, .env.example allowed
+expect deny  "glob .e* in Bash"                  Bash "$(bash_cmd "cat .e*")"
+expect deny  "glob .??v in Bash"                 Bash "$(bash_cmd "head .??v")"
+expect deny  "brace {.env,x} in Bash"            Bash "$(bash_cmd "cat {.env,README.md}")"
+expect deny  "Glob tool pattern .e*"             Glob '{"pattern":".e*"}'
+expect allow "process.env in a grep"             Bash "$(bash_cmd "grep -rn process.env src")"
+expect allow "cat * (shell skips dotfiles)"      Bash "$(bash_cmd "cat *.md")"
 expect deny  "cat .env"                          Bash "$(bash_cmd "cat .env")"
 expect deny  "source ./.env"                     Bash "$(bash_cmd "source ./.env && npm run dev")"
 expect deny  "grep in .env.local"                Bash "$(bash_cmd "grep KEY .env.local")"

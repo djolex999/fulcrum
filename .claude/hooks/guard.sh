@@ -8,7 +8,7 @@
 # Fails closed: if the input cannot be checked, the tool call is denied.
 
 /usr/bin/env python3 -I -c '
-import json, os, re, shlex, sys
+import fnmatch, json, os, re, shlex, sys
 
 WRITE = {"archive", "create", "replace", "start", "stop", "update", "publish", "upload", "push",
          "set", "run", "close", "add", "connect", "revoke", "bulk-create", "sync", "feedback",
@@ -17,6 +17,8 @@ SEP = {";", "&&", "||", "|", "&", "(", ")", "|&", ";;", "\n"}
 ENV_SAFE_FIRST = {"ls", "stat", "test", "["}
 ENV_SAFE_GIT = {"check-ignore", "status", "ls-files"}
 ENV_FILE = re.compile(r"(?:^|/)\.env(?:\.(?!example$)[A-Za-z0-9_-]+)?$")
+# .env anywhere in a token ({.env,x}, "./.env", .env.local), but not .env.example or process.env
+ENV_ANY = re.compile(r"(?<![A-Za-z0-9_])\.env(?![A-Za-z0-9_]|\.example(?![A-Za-z0-9_.]))")
 
 def deny(reason):
     print(json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse",
@@ -54,6 +56,7 @@ def check_cmd(cmd, depth=0):
     if depth > 3:
         deny("command nesting too deep to check")
     toks = tokens(cmd)
+    mentions_adapty = "adapty" in cmd
     for seg in segments(toks):
         # Nested shells: bash -c "...", sh -c, eval "...", and any quoted token with spaces
         for t in seg:
@@ -72,14 +75,24 @@ def check_cmd(cmd, depth=0):
                          "Writes go through the Fulcrum approval gate, or a human runs them.")
                 if "apps" in words and "get" in words:
                     deny("`adapty apps get` returns the app secret key and is blocked.")
+        # Dynamic command names next to adapty: $CMD, ${X}, eval, xargs, a pipe into sh/bash
+        if mentions_adapty:
+            cmd_words = [t for t in seg if not re.match(r"^[A-Za-z_][A-Za-z0-9_]*=", t)]
+            head = cmd_words[0] if cmd_words else ""
+            if head.startswith("$") or os.path.basename(head) in {"eval", "xargs", "env", "exec", "source", "."} \
+               or (os.path.basename(head) in {"sh", "bash", "zsh"} and "-c" not in cmd_words):
+                deny("a dynamic command (" + head + ") in a command that mentions adapty cannot be checked.")
         # .env access
         first = os.path.basename(seg[0]) if seg else ""
         safe = first in ENV_SAFE_FIRST or (first == "git" and len(seg) > 1 and seg[1] in ENV_SAFE_GIT)
         if not safe:
             for t in seg:
-                for part in re.split(r"[=<>]", t):
-                    if ENV_FILE.search(part.rstrip("/")):
-                        deny("access to " + part + " is blocked (secrets live there).")
+                if ENV_ANY.search(t):
+                    deny("access to " + t + " is blocked (secrets live there).")
+                base = os.path.basename(t)
+                if base.startswith(".") and re.search(r"[*?\[]", base) and \
+                   any(fnmatch.fnmatchcase(n, base) for n in (".env", ".env.local", ".env.production")):
+                    deny("the pattern " + t + " can match .env and is blocked.")
 
 try:
     event = json.load(sys.stdin)
@@ -90,8 +103,12 @@ try:
     else:
         for key in ("file_path", "path", "glob", "pattern" if tool == "Glob" else ""):
             v = str(tin.get(key, "")) if key else ""
-            if v and ENV_FILE.search(v.rstrip("/")):
+            if v and (ENV_FILE.search(v.rstrip("/")) or ENV_ANY.search(v)):
                 deny("access to " + v + " is blocked (secrets live there).")
+            b = os.path.basename(v)
+            if v and b.startswith(".") and re.search(r"[*?\[]", b) and \
+               any(fnmatch.fnmatchcase(n, b) for n in (".env", ".env.local")):
+                deny("the pattern " + v + " can match .env and is blocked.")
 except SystemExit:
     raise
 except Exception as e:

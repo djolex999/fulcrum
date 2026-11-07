@@ -11,15 +11,17 @@ from zoneinfo import ZoneInfo
 R = "[REDACTED]"
 UUID = re.compile(r"^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$")
 RULES = [
+    # Explicit project secrets, any value form (fallback that cannot regress)
+    (re.compile(r"(?:ADAPTY_TOKEN|ANTHROPIC_API_KEY)\s*=\s*\S*"), R),
     # Known token prefixes
     (re.compile(r"(?<![A-Za-z0-9])(?:secret_live_|public_live_|dev_live|sk-|ghp_|gho_|github_pat_|xox[bpas]-)\S*"), R),
     # Authorization / API key headers: keep the header name, drop the value (incl. "Bearer x")
-    (re.compile(r"(?i)\b(authorization|proxy-authorization|x-api-key|api-key|cookie)\s*:\s*(?:(?:bearer|basic|token)\s+)?[^\s\x22\x27]+"), r"\1: " + R),
-    (re.compile(r"(?i)\bbearer\s+[^\s\x22\x27]+"), "Bearer " + R),
+    (re.compile(r"(?i)\b(authorization|proxy-authorization|x-api-key|api-key|cookie)\s*:\s*(?:(?:bearer|basic|token)\s+)?(?:\\*\x22[^\x22]*\x22|\\*\x27[^\x27]*\x27|[^\s\x22\x27\\]+)"), r"\1: " + R),
+    (re.compile(r"(?i)\bbearer\s+(?:\\*\x22[^\x22]*\x22|\\*\x27[^\x27]*\x27|[^\s\x22\x27\\]+)"), "Bearer " + R),
     # NAME=value or NAME: value where NAME contains KEY/TOKEN/SECRET/PASSWORD/PASSWD/PWD/CREDENTIAL/AUTH
-    (re.compile(r"(?i)\b([A-Za-z0-9_.-]*(?:key|token|secret|passw(?:or)?d|pwd|credential|auth)[A-Za-z0-9_.-]*)(\s*[=:]\s*)[^\s\x22\x27]+"), r"\1\2" + R),
+    (re.compile(r"(?i)\b([A-Za-z0-9_.-]*(?:key|token|secret|passw(?:or)?d|pwd|credential|auth)[A-Za-z0-9_.-]*)(\s*[=:]\s*)(?:\\*\x22[^\x22]*\x22|\\*\x27[^\x27]*\x27|[^\s\x22\x27\\]+)"), r"\1\2" + R),
     # --token value / --api-key=value style flags
-    (re.compile(r"(?i)(--?[a-z0-9-]*(?:key|token|secret|password|passwd|credential)[a-z0-9-]*)(?:=|\s+)[^\s\x22\x27-][^\s\x22\x27]*"), r"\1 " + R),
+    (re.compile(r"(?i)(--?[a-z0-9-]*(?:key|token|secret|password|passwd|credential)[a-z0-9-]*)(?:=|\s+)(?!-)(?:\\*\x22[^\x22]*\x22|\\*\x27[^\x27]*\x27|[^\s\x22\x27\\]+)"), r"\1 " + R),
     # Credentials in URLs: scheme://user:pass@host
     (re.compile(r"([a-zA-Z][a-zA-Z0-9+.-]*://)[^/\s:@]+:[^/\s@]+@"), r"\1" + R + "@"),
 ]
