@@ -106,6 +106,11 @@ Shortened paraphrases of the briefs; the point is what each one withholds or nar
 - **What we changed:** day-aligned looks (re-derived independently: week 9 z moved 4.49 → 4.34 because 41 users installed in the four-hour gap leave the sample; same week, same verdict), no crossings on non-goal metrics, labelled end views, corrected SPEC. Following the project rule, the spec moved, not the test tolerance.
 - **What we will say on stage because of it:** "about $19k" (an independent matched-cohort check gives $17.5k), "p just under 0.05 on that day's check" (a permutation test gives 0.050), never the false-precision figures.
 
+### Real verdicts behind the tools (Task 9b, Sat 7 Nov, ~17:30, Fable + Sonnet)
+
+- **Found:** the core rule held on every path the reviewer could construct (a stop becomes pending only on WINNER for exactly the requested arm; replays, wrong arms, non-goal metrics, engine errors and unknown plans all block). Two hardening gaps: duplicate Adapty arm names could map to one flow, and the `evidence` shown to the agent came from a second judge call that could disagree with the decision after a transient error.
+- **What we changed:** the arm mapping must be one-to-one or it is refused as ambiguous, and `request_stop` makes one judge call whose result is both the decision and the evidence.
+
 ## Phases
 
 One entry per build phase, written at the end of `phase-checkpoint` in Djordje's words.
