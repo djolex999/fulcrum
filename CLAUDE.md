@@ -50,18 +50,21 @@ src/ui/approve.ts        Hono server: one page with pending actions, Approve and
 tests/                   one or more tests per acceptance criterion, named with its AC id
 ```
 
-## Planned shape (decide after kickoff)
+## Planned shape
 
-Nothing here is built. Confirm or change it once the kickoff brief is out.
+Nothing here is built yet. **The demo design is in [docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md)**; SPEC.md holds the contracts and ACs.
 
 - **What it is:** AI agents run paywall experiments that make subscription apps more money, without fooling themselves. Fulcrum is an MCP server between the agent and Adapty: the agent reads test data through Fulcrum's fixed read calls and has no direct write path; every write passes a statistical check and a human approval before Fulcrum executes it through the Adapty CLI (auth via `ADAPTY_TOKEN`).
 - **Why AI:** the statistics are plain deterministic code. The AI part is the agent doing growth work (finding the next hypothesis, proposing tests, explaining verdicts); Fulcrum is what makes that safe. This is the weakest judge question, so answer it honestly.
-- **Money:** the stopping boundary works both ways. It blocks fake winners (Settings: p ≈ 0.049 as of 2 Sep, p = 0.067 and z = 1.83 at the end) and lets real winners ship weeks earlier (Onboarding). Adapty takes a share of customer revenue, so wrong test decisions cost Adapty too.
+- **Money:** the stopping boundary works both ways. It blocks fake winners (Settings: the declared winner `settings` never crossed the boundary and ends behind, p = 0.067, z = 1.83) and lets real winners ship weeks earlier (Onboarding, week 9). Adapty takes a share of customer revenue, so wrong test decisions cost Adapty too.
 - **Pitch line:** "A seatbelt for AI agents on your monetization stack."
-- **Demo flow:**
-  1. Settings **as of 2 Sep** (time travel): a naive agent would ship it; Fulcrum blocks it and shows the reason, then fast-forward to D90 to show the gap vanished. (At the end state even a plain t-test blocks it, so the end state alone proves nothing.)
-  2. The agent proposes closing Onboarding; the check passes, a human approves, and Fulcrum runs the CLI stop live.
-- **Key number (compute at the event from the offline CSV):** the week the Onboarding test first crosses the boundary, and the extra revenue from shipping the winner at that week instead of leaving the test running.
+- **The moment to remember:** Fulcrum says "not yet" to a hurried agent, and later says "now" on the same test, and the test stops live in Adapty. Fulcrum knows *when*.
+- **The agent:** real Claude Code in a demo folder whose MCP config has **only** the Fulcrum server (Adapty plugin off, no CLI, no token). The "naive" moment is the real agent following a hurried human's instruction.
+- **Demo flow (three parts):**
+  1. **Onboarding, "not yet" then "now":** replay at week 2, `request_stop` is blocked (`BEFORE_HORIZON`, the goal is 60-day revenue). Jump to week 9: `WINNER`. Then live: the agent requests the stop, Milica approves, Fulcrum runs the CLI stop.
+  2. **Settings, the mistake already in the dashboard:** Adapty shows `settings` as the winner; `test_timeline` shows the boundary was never crossed for it, and at the end `main_lifetime` leads on every metric.
+  3. **Peeking simulation:** ≈ 22% false wins with weekly peeking, ≈ 5% with the boundary. "Settings is one of the 22% that really happened."
+- **Do not hang the demo on one date.** Independent checks found the old 2 Sep centerpiece does not hold (p = 0.26), and the only naive-significant `settings` lead (16 Aug, 30-day RPI, p ≈ 0.044) is fragile. Mention 16 Aug only as metric shopping, with that wording.
 - **Fallback if the kickoff brief changes direction:** Edit-5 Router. Users with 5+ AI edits on day one get an attribute and a segment, with a test on `ai_limit_reached`.
 
 ### Architecture (decided in review)
@@ -74,15 +77,15 @@ Nothing here is built. Confirm or change it once the kickoff brief is out.
 
 ### Verdict rules
 
-- **Judge only on the test's declared goal metric**, parsed from its goal text. Block "metric shopping". Example: Settings looks like a clear win on payer rate (z ≈ 5.3), but its goal is revenue, so payer rate does not count.
+- **Judge only on the test's declared goal metric**, from the checked-in test plan file (`goal_source: "test_plan"`). Block "metric shopping": a request on any other metric (for example Settings on 30-day RPI or payer rate) is refused.
 - **The horizon comes from the goal.** Onboarding's goal is 60-day revenue per install, so the first valid look is week 9.
 - **K (planned number of looks) and the horizon are parameters** from the test plan, with a visible fallback when the plan does not say. No hardcoded 15.
 - **Boundary:** O'Brien-Fleming style, `c × sqrt(K/k)` at look k, with c calibrated by simulation to about 5% false wins (c ≈ 2.1 for K = 15).
 
 ### Time travel
 
-- An `as_of` parameter replays the offline CSV as of a past date.
-- **Demo centerpiece:** Settings as of 2 Sep (about 50% of users). The other arm leads by +$2.48 with p ≈ 0.049, so a naive agent would ship it. Fulcrum blocks it because the boundary at that look is about 2.9. By D90 the difference has shrunk to about +$0.09.
+- An `as_of` parameter replays the offline CSV as of a past date; `test_timeline` replays every weekly look.
+- **Demo use:** Onboarding at week 2 ("not yet") and week 9 ("now"), and the full Settings timeline. Replays never create a pending action.
 
 ### Data source label
 
@@ -94,12 +97,12 @@ Record every write attempt, blocked or approved, with the reason, timestamp and 
 
 ### Money numbers for the pitch (re-verify in code at the event)
 
-- Onboarding clears the boundary in week 9; shipping the winner then is worth about **$21k more** on Lumen.
-- **Do not claim $50k.**
+- Onboarding clears the boundary in week 9 (z ≈ 4.5 vs 2.71, confirmed by two independent checks); shipping the winner then is worth **≈ $20k** more on Lumen (independent check ≈ $19.4k). Say "≈ $20k" until the implementation computes it (AC-11).
+- **Do not claim $50k or $21k.**
 
 ### Demo staging
 
-- Run the Settings block live.
+- Run the Onboarding "not yet" replay and the Settings timeline live.
 - Send the Onboarding request 2 minutes before the demo so the approval card is already waiting.
 - Have a second screen already open on the test page, with `adapty ab-tests get --json` as proof that the stop happened.
 - Record a backup video on Saturday evening, after the first end-to-end run.
@@ -113,6 +116,7 @@ If the kickoff brief excludes agents or asks for a consumer feature, switch to t
 
 - The approval UI can be one plain HTML page.
 - Skip polish before skipping time travel.
+- Only phase 4 is optional; the backup video, README and rehearsal are mandatory.
 
 ## Build phases (cut from the end)
 

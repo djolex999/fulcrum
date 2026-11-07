@@ -30,6 +30,19 @@ How AI was used to build Fulcrum at the Adapty Hackathon Belgrade (7 to 8 Nov 20
   - Onboarding RPI gap: ≈ $4.05 at D60 (our note said +$3.63 without a horizon).
 - **Action:** pitch numbers stay [estimate] until the implementation's AC-1/AC-2 tests produce them; use "≈ $20k" until then.
 
+### Cross-check 2: the Settings timeline (Sat 7 Nov, ~12:25, Fable)
+
+- **Who:** a fresh subagent on Fable with the same isolation as cross-check 1. It was told only that Adapty shows Settings as completed with `settings` declared the winner.
+- **Asked:** at every weekly look and on five metrics (revenue to date, 7/14/30-day RPI, payer rate), did `settings` ever lead with naive p < 0.05, and was the boundary ever crossed?
+- **Found:** exactly one naive-significant `settings` lead, 16 Aug on 30-day RPI (p ≈ 0.044, boundary 3.3 to 3.5, not crossed). It is fragile (permutation p = 0.052, below 0.05 on 2 of 27 days). The boundary was **never crossed for `settings`**; at the end `main_lifetime` leads on all five metrics, decisively on payer rate (24.4% vs 17.1%). The arms also sell different products, so it is not a clean anchor test.
+- **What we changed because of it:** we dropped the "Settings as of 2 Sep" demo centerpiece. Settings is now "the mistake already in the dashboard" (robust end state and full timeline), and the "not yet, then now" moment moved to Onboarding. See the [demo design](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md).
+
+### Builder check of the demo design (Sat 7 Nov, ~12:40, Sonnet)
+
+- **Who:** a fresh subagent on Sonnet that read only the design document and was asked what it would still need before it could plan the build.
+- **Found:** 8 questions: contracts, data and CLI shape, the week 2 and week 9 cutoffs, calibration, approval security, the Settings "promote" wording, the pre-commit hook, and what is optional.
+- **What we changed:** we answered all 8 in the design doc. Four were decided as marked calls: the live stop is judged on the CSV, c is precomputed by simulation, the Settings goal is revenue per install to date, and the approval page re-checks the verdict when someone approves and executes at most once. Nothing needed a new decision from Djordje before planning.
+
 ## Phases
 
 One entry per build phase, written at the end of `phase-checkpoint` in Djordje's words.
