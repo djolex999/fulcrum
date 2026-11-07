@@ -20,7 +20,7 @@ flowchart LR
 - **Pre-commit hook.** A commit lands only if it has no secrets, `tsc --noEmit` is clean and every test passes ([.githooks/pre-commit](.githooks/pre-commit)).
 - **Reviewer subagents.** Before key commits a fresh subagent that saw only the diff and SPEC.md answered three questions: can the agent bypass the gate, can the token leak, is the boundary right (table below).
 - **Independent recomputation.** A subagent with no access to our code re-computed the pitch numbers from the raw CSV: the money estimate is $19.4k in our implementation and $17.5k in its matched-cohort check, so we say "about $19k".
-- **AI log hook.** A `PostToolUse` hook appends every edit and command, secrets redacted, to a local gitignored log; this file is the public summary ([.claude/hooks/ai-log.sh](.claude/hooks/ai-log.sh)).
+- **AI log hook.** A `PostToolUse` hook appends every edit and command, secrets redacted, to a local gitignored log; this file is the public summary ([.claude/hooks/ai-log.sh](.claude/hooks/ai-log.sh)). The design follows Vir, Djordje's own session-distillation CLI (pre-existing, not part of Fulcrum): capture raw session events, then distill them into a short human-readable record; here a checkpoint after each phase does the distilling.
 
 ## Harness, tools and MCPs
 
