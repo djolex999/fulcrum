@@ -22,3 +22,6 @@ data/
 
 # Fulcrum runtime state (ledger)
 .fulcrum/
+
+# Developer-only activity log (PostToolUse hook); never published
+.ai-log/
