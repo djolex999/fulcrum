@@ -4,6 +4,8 @@
 
 Fulcrum is the only door between AI agents and an Adapty account. There is no tool, no CLI and no token for the agent: its only path to a write is Fulcrum. Agents can read test data; every change passes the test's declared goal, a sequential stopping boundary and a human approval, and only then does Fulcrum execute it.
 
+**Landing page:** [djolex999.github.io/fulcrum-site](https://djolex999.github.io/fulcrum-site/), the one-page overview with the three demo moments ([source](https://github.com/djolex999/fulcrum-site)).
+
 ## The problem
 
 Growth teams running paywall and onboarding A/B tests routinely:
@@ -40,7 +42,7 @@ The result is shipped "winners" that never actually won.
 - **Pre-event work:** we analyzed the public Lumen demo dataset (`adapty-seed-data-hack`) before the event to understand its shape. No code or data from that analysis is reused in this repository.
 - **Made before kickoff:** a break-time display screen, a draft slide deck, a draft spec (SPEC.md), and the AI log tooling (AI_LOG.md, the `.claude/hooks/ai-log.sh` hook and its test), and a guard hook for the coding agent (`.claude/hooks/guard.sh` and its test).
 - **Pre-existing personal tooling**, not part of the project core: Claude Code skills (`phase-checkpoint`, `demo-preflight`), hooks, and Vir (Djordje's own session-distillation CLI).
-- **AI tools:** Claude Code, including fresh reviewer subagents that see only the diff and the spec.
+- **AI tools:** Claude Code, including fresh reviewer subagents that see only the diff and the spec. The landing page was designed with Claude Design during the event and lives in a separate repo.
 - **Boilerplate / third-party starters:** none yet. Anything used will be listed here.
 
 ## Data
