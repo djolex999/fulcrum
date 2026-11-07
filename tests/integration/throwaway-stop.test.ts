@@ -1,8 +1,9 @@
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createAdaptyCli } from "../../src/adapty/cli.js";
+import { isThrowawayTest } from "./throwaway-guard.js";
 import { createLedger } from "../../src/gate/ledger.js";
 import { createGate, type Judge } from "../../src/gate/pending.js";
 
@@ -21,7 +22,7 @@ describe.skipIf(process.env.ALLOW_WRITES !== "1" || !process.env.THROWAWAY_TEST_
 
       // Safety check before anything else.
       const before = await cli.getTest(testId);
-      if (before.state !== "live" || /^(Onboarding|Main)/.test(before.title)) {
+      if (!isThrowawayTest(before)) {
         throw new Error("refusing: not a throwaway test");
       }
       const arm = before.arms[0];
@@ -34,8 +35,9 @@ describe.skipIf(process.env.ALLOW_WRITES !== "1" || !process.env.THROWAWAY_TEST_
       });
 
       const dir = mkdtempSync(join(tmpdir(), "fulcrum-live-"));
+      const ledgerPath = join(dir, "ledger.jsonl");
       try {
-        const ledger = createLedger(join(dir, "ledger.jsonl"));
+        const ledger = createLedger(ledgerPath);
         const gate = createGate({ cli, ledger, judge });
 
         const req = await gate.requestStop({
@@ -57,8 +59,10 @@ describe.skipIf(process.env.ALLOW_WRITES !== "1" || !process.env.THROWAWAY_TEST_
             .all()
             .some((e) => e.id === req.actionId && e.tool === "execute_stop" && e.status === "executed"),
         ).toBe(true);
-      } finally {
-        rmSync(dir, { recursive: true, force: true });
+      } catch (err) {
+        // Keep the audit trail: the stop is irreversible, so never delete the ledger.
+        console.error(`live test failed; ledger kept at ${ledgerPath}`);
+        throw err;
       }
     }, 120_000);
   },

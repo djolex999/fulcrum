@@ -9,7 +9,7 @@
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:live": "vitest run tests/integration",
+    "test:live": "vitest run --config vitest.live.config.ts",
     "start": "tsx src/mcp/server.ts"
   },
   "dependencies": {
