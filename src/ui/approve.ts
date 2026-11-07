@@ -10,7 +10,7 @@ import { Hono, type Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import type { Ledger } from "../gate/ledger.js";
 import type { ActionView, createGate } from "../gate/pending.js";
-import type { ProposalView, Proposals } from "../gate/proposals.js";
+import { DRAFT_NOTE, type ProposalView, type Proposals } from "../gate/proposals.js";
 import { createLogger } from "../mcp/log.js";
 import type { StopLabels } from "./labels.js";
 
@@ -29,11 +29,53 @@ export function escapeHtml(value: unknown): string {
 }
 
 function page(title: string, body: string): string {
-  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${escapeHtml(title)}</title>
-<style>body{font-family:system-ui,sans-serif;max-width:60rem;margin:2rem auto;padding:0 1rem}
-table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.4rem;text-align:left;vertical-align:top}
-.notice{background:#fff3cd;padding:.6rem;border:1px solid #e0c36c}</style></head><body>${body}</body></html>`;
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${escapeHtml(title)}</title>
+<style>${STYLE}</style></head><body><main>${body}</main></body></html>`;
 }
+
+// One stylesheet, no scripts. Cards instead of a wide table, so a human sees in two seconds WHAT they approve.
+const STYLE = `
+:root{--bg:#f6f7f9;--card:#fff;--ink:#14161a;--muted:#5d6470;--line:#e3e6eb;--soft:#f1f3f6;
+--stop:#b42318;--stop-bg:#fdecea;--new:#1d4ed8;--new-bg:#e8efff;--ok:#067647;--ok-bg:#e6f6ee;--warn:#8a5a00;--warn-bg:#fff6dd}
+@media (prefers-color-scheme:dark){:root{--bg:#0f1115;--card:#171a20;--ink:#eceff3;--muted:#9aa3af;--line:#2a2f38;--soft:#1f232b;
+--stop:#ff8a7a;--stop-bg:#3a1d1a;--new:#8fb0ff;--new-bg:#1c2540;--ok:#2f9e6a;--ok-bg:#15301f;--warn:#f2c66d;--warn-bg:#352a12}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:56rem;margin:0 auto;padding:2rem 1rem 3rem}
+header.top{display:flex;justify-content:space-between;align-items:flex-end;gap:1rem;flex-wrap:wrap;margin-bottom:1.5rem}
+h1{font-size:1.6rem;margin:0}
+.tag{color:var(--muted);margin:.25rem 0 0}
+h2{font-size:.85rem;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:2rem 0 .75rem}
+.count{background:var(--card);border:1px solid var(--line);border-radius:999px;padding:.3rem .8rem;font-weight:600}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;margin-bottom:1rem;overflow:hidden}
+.card.stop{border-top:4px solid var(--stop)}.card.new{border-top:4px solid var(--new)}
+.head{padding:1rem 1.25rem .5rem;display:flex;gap:.5rem;flex-wrap:wrap;align-items:center}
+.badge{display:inline-block;font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;border-radius:6px;padding:.2rem .5rem}
+.b-stop{background:var(--stop-bg);color:var(--stop)}.b-new{background:var(--new-bg);color:var(--new)}
+.b-ok{background:var(--ok-bg);color:var(--ok)}.b-muted{background:var(--soft);color:var(--muted)}
+.body{padding:0 1.25rem 1rem}
+.title{font-size:1.25rem;font-weight:700;margin:.1rem 0 0}
+.id{font:12px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:var(--muted);word-break:break-all}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(14rem,1fr));gap:.75rem;margin:1rem 0}
+.box{background:var(--soft);border-radius:10px;padding:.75rem .9rem}
+.label{font-size:.72rem;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:.2rem}
+.big{font-size:1.05rem;font-weight:650}
+.why{border-left:3px solid var(--ok);padding:.25rem 0 .25rem .8rem;margin:.75rem 0}
+.agent{border-left:3px solid var(--line);padding:.25rem 0 .25rem .8rem;margin:.75rem 0;color:var(--muted)}
+.agent .said{color:var(--ink);font-style:italic}
+ul.policy{margin:.25rem 0 0;padding-left:1.1rem}
+.callout{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:.6rem .9rem;margin:.75rem 0;font-weight:600}
+.decide{display:flex;gap:.5rem;flex-wrap:wrap;align-items:center;border-top:1px solid var(--line);background:var(--soft);padding:.9rem 1.25rem;margin:0}
+.decide input[name=name]{flex:1 1 12rem;min-width:10rem;padding:.55rem .7rem;border:1px solid var(--line);border-radius:8px;background:var(--card);color:var(--ink);font:inherit}
+button{font:inherit;font-weight:650;border-radius:8px;padding:.55rem 1.1rem;cursor:pointer;border:1px solid transparent}
+.approve{background:var(--ok);color:#fff}.reject{background:transparent;color:var(--stop);border-color:var(--stop)}
+.when{color:var(--muted);font-size:.85rem;margin-left:auto}
+.notice{background:var(--warn-bg);color:var(--warn);border-radius:10px;padding:.7rem 1rem;font-weight:600}
+.empty{background:var(--card);border:1px dashed var(--line);border-radius:14px;padding:2.5rem;text-align:center;color:var(--muted)}
+table{border-collapse:collapse;width:100%;background:var(--card);font-size:.85rem}
+td,th{border:1px solid var(--line);padding:.4rem .5rem;text-align:left;vertical-align:top}
+a{color:var(--new)}
+`;
 
 // Constant-time comparison for secrets, so response timing can't leak a correct guess character by character.
 function safeEqual(a: string, b: string): boolean {
@@ -59,44 +101,78 @@ export function loginTtlMs(raw: string | undefined = process.env.FULCRUM_LOGIN_T
 
 const SESSION_COOKIE = "fulcrum_session";
 
+// The decision bar shared by both card kinds. The name is required and recorded in the ledger as the approver.
+function decideForm(csrf: string, approveAction: string, rejectAction: string, approveLabel: string, createdAt: string): string {
+  return `<form class="decide" method="post"><input type="hidden" name="csrf" value="${escapeHtml(csrf)}">
+<input name="name" placeholder="your name (recorded in the ledger)" required aria-label="your name">
+<button class="approve" type="submit" formaction="${approveAction}">${escapeHtml(approveLabel)}</button>
+<button class="reject" type="submit" formaction="${rejectAction}">Reject</button>
+<span class="when" title="${escapeHtml(createdAt)}">requested ${escapeHtml(shortTime(createdAt))}</span></form>`;
+}
+
+// "2026-11-07T20:06:40.540Z" -> "20:06 UTC"; anything else is shown as is.
+function shortTime(iso: string): string {
+  const m = /T(\d{2}:\d{2})/.exec(iso);
+  return m ? `${m[1]} UTC` : iso;
+}
+
+// A stop request: names first (what a human checks), ids underneath (what Fulcrum acts on).
 function pendingRow(a: ActionView, csrf: string, labels?: StopLabels): string {
   const id = encodeURIComponent(a.actionId);
-  // Names first (what a human checks), ids underneath (what Fulcrum acts on).
   const l = labels?.get(a.actionId);
-  const test = l ? `<strong>${escapeHtml(l.testTitle)}</strong><br><small>${escapeHtml(a.testId)}</small>` : escapeHtml(a.testId);
-  const arm = l && l.armName ? `<strong>${escapeHtml(l.armName)}</strong><br><small>${escapeHtml(a.winnerArmId)}</small>` : escapeHtml(a.winnerArmId);
-  return `<tr><td>${test}<br><small>${escapeHtml(a.actionId)}</small></td>
-<td>${arm}</td><td>${escapeHtml(a.metric)}</td><td>${escapeHtml(a.verdict)}</td>
-<td>${escapeHtml(a.reason)}</td><td>${escapeHtml(a.rationale)}</td><td>${escapeHtml(a.createdAt)}</td>
-<td><form method="post"><input type="hidden" name="csrf" value="${escapeHtml(csrf)}"><input name="name" placeholder="your name" required>
-<button type="submit" formaction="/approve/${id}">Approve</button>
-<button type="submit" formaction="/reject/${id}">Reject</button></form></td></tr>`;
+  const testName = l ? escapeHtml(l.testTitle) : "A/B test";
+  const armName = l && l.armName ? escapeHtml(l.armName) : escapeHtml(a.winnerArmId);
+  return `<article class="card stop">
+<div class="head"><span class="badge b-stop">Stop a test</span><span class="badge b-ok">Verdict: ${escapeHtml(a.verdict)}</span><span class="badge b-muted">Metric: ${escapeHtml(a.metric)}</span></div>
+<div class="body">
+<p class="title">${testName}</p><div class="id">test ${escapeHtml(a.testId)} · request ${escapeHtml(a.actionId)}</div>
+<div class="grid"><div class="box"><div class="label">Ship this winner</div><div class="big">${armName}</div><div class="id">${escapeHtml(a.winnerArmId)}</div></div>
+<div class="box"><div class="label">What happens on Approve</div>Fulcrum re-checks the verdict, then stops the test in Adapty with this winner. A stopped test cannot be restarted.</div></div>
+<div class="why"><div class="label">Fulcrum's check</div>${escapeHtml(a.reason)}</div>
+<div class="agent"><div class="label">The agent's words (not verified)</div><span class="said">${escapeHtml(a.rationale)}</span></div>
+</div>
+${decideForm(csrf, `/approve/${id}`, `/reject/${id}`, "Approve: stop the test", a.createdAt)}
+</article>`;
 }
 
 // A proposed NEW test. Approving only creates it as a draft; starting it is a human decision in Adapty.
 function proposalRow(a: ProposalView, csrf: string): string {
   const id = encodeURIComponent(a.actionId);
-  const flows = a.flows.map((f, i) => `${i === 0 ? "Control" : "Challenger"}: ${escapeHtml(f.flowName)} (${escapeHtml(f.flowId)}), ${escapeHtml(f.weight)}%`).join("<br>");
-  return `<tr><td>${escapeHtml(a.placement)}<br><small>${escapeHtml(a.placementTitle)}</small><br><small>${escapeHtml(a.actionId)}</small></td>
-<td>${flows}</td><td>${escapeHtml(a.audience)}</td><td>${escapeHtml(a.hypothesis)}</td>
-<td>${escapeHtml(a.reason)}</td><td>${escapeHtml(a.createdAt)}</td>
-<td><form method="post"><input type="hidden" name="csrf" value="${escapeHtml(csrf)}"><input name="name" placeholder="your name" required>
-<button type="submit" formaction="/proposals/${id}/approve">Approve: create draft</button>
-<button type="submit" formaction="/proposals/${id}/reject">Reject</button></form></td></tr>`;
+  const flows = a.flows
+    .map(
+      (f, i) =>
+        `<div class="box"><div class="label">${i === 0 ? "Control" : "Challenger"} · ${escapeHtml(f.weight)}% of traffic</div><div class="big">${escapeHtml(f.flowName)}</div><div class="id">${escapeHtml(f.flowId)}</div></div>`,
+    )
+    .join("");
+  // The pending reason is the policy notes followed by the draft note; the draft note has its own callout below.
+  const notes = a.reason.replace(DRAFT_NOTE, "").replace(/[;\s]+$/, "").trim();
+  const policy = `<li>Passed: allowed placement, traffic cap, no live test on this placement, daily write limit.</li>${notes ? `<li>${escapeHtml(notes)}</li>` : ""}`;
+  const audience = a.audience === "all" ? "All users" : `Segment ${escapeHtml(a.audience)}`;
+  return `<article class="card new">
+<div class="head"><span class="badge b-new">New test · draft only</span><span class="badge b-ok">Policy check passed</span><span class="badge b-muted">Audience: ${audience}</span></div>
+<div class="body">
+<p class="title">${escapeHtml(a.placementTitle)}</p><div class="id">placement ${escapeHtml(a.placement)} · request ${escapeHtml(a.actionId)}</div>
+<div class="grid">${flows}</div>
+<div class="agent"><div class="label">The agent's hypothesis (not verified)</div><span class="said">${escapeHtml(a.hypothesis)}</span></div>
+<div class="why"><div class="label">Policy (fulcrum.policy.json)</div><ul class="policy">${policy}</ul></div>
+<div class="callout">Approving creates the test as a draft only; starting it is your decision in Adapty.</div>
+</div>
+${decideForm(csrf, `/proposals/${id}/approve`, `/proposals/${id}/reject`, "Approve: create draft", a.createdAt)}
+</article>`;
 }
 
 function listPage(gate: Gate, csrf: string, notice?: string, proposals?: Proposals, labels?: StopLabels): string {
-  const rows = gate.pending().map((a) => pendingRow(a, csrf, labels)).join("");
-  const prows = (proposals?.pending() ?? []).map((a) => proposalRow(a, csrf)).join("");
+  const stops = gate.pending();
+  const props = proposals?.pending() ?? [];
+  const n = stops.length + props.length;
   const note = notice ? `<p class="notice">${escapeHtml(notice)}</p>` : "";
-  const table = rows
-    ? `<h2>Stop a test</h2><table><tr><th>Test</th><th>Winner arm</th><th>Metric</th><th>Verdict</th><th>Reason</th><th>Agent rationale</th><th>Created</th><th>Decision</th></tr>${rows}</table>`
-    : "";
-  const ptable = prows
-    ? `<h2>Proposed new tests</h2><p>Approving creates the test as a draft only; starting it is your decision in Adapty.</p><table><tr><th>Placement</th><th>Flows</th><th>Audience</th><th>Hypothesis</th><th>Policy</th><th>Created</th><th>Decision</th></tr>${prows}</table>`
-    : "";
-  const body = table + ptable || "<p>No pending actions.</p>";
-  return page("Fulcrum approvals", `<h1>Fulcrum: pending approvals</h1>${note}${body}<p><a href="/ledger">Ledger</a></p>`);
+  const stopSection = stops.length ? `<h2>Stop a test</h2>${stops.map((a) => pendingRow(a, csrf, labels)).join("")}` : "";
+  const propSection = props.length ? `<h2>Proposed new tests</h2>${props.map((a) => proposalRow(a, csrf)).join("")}` : "";
+  const body =
+    stopSection + propSection ||
+    `<div class="empty">No pending actions. When an agent asks Fulcrum for a change that passes its checks, it appears here for you to decide.</div>`;
+  const top = `<header class="top"><div><h1>Fulcrum approvals</h1><p class="tag">Agents ask. You decide. Nothing changes in Adapty until you approve.</p></div><span class="count">${n} waiting</span></header>`;
+  return page("Fulcrum approvals", `${top}${note}${body}<p><a href="/ledger">Ledger: every attempt, blocked or approved</a></p>`);
 }
 
 // Request path, in order: security headers -> Host check -> /login (one-time code, sets cookie)
