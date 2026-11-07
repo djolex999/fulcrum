@@ -1,3 +1,9 @@
+// The tools the AI agent sees (MCP). Agent-centred on purpose: the agent can read tests, ask for
+// a verdict, see the weekly timeline, ask to stop a test and poll the request status.
+// There is NO approve tool. Approval only exists on the human web page (src/ui/approve.ts),
+// so a prompt-injected or confused agent cannot approve its own request.
+// Every tool result passes through one scrub function, so a secret can't leave through any tool.
+
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { AdaptyCli } from "../adapty/cli.js";
@@ -10,6 +16,7 @@ import { ToolError } from "./errors.js";
 
 type Gate = ReturnType<typeof createGate>;
 
+// Where the numbers come from. Only the offline CSV is implemented; live Adapty metrics are not.
 export type JudgeSource = "csv" | "adapty_metrics";
 
 /** Full verdict engine output. The gate only needs the Judge subset. */
@@ -40,9 +47,11 @@ export interface ToolDeps {
   /** Test plans, joined to Adapty tests by title (list_tests goal and horizon; arm mapping check). */
   plans?: readonly TestPlan[];
   log?: (message: string) => void;
+  // Redacts secrets from everything the agent receives (see ok/fail below).
   scrub?: (text: string) => string;
 }
 
+// as_of is agent input, so it is parsed strictly. A bad date becomes INVALID_AS_OF, never a surprise Date.
 function parseAsOf(raw: string | undefined): Date | undefined {
   if (raw === undefined) return undefined;
   const bad = (): ToolError => new ToolError("INVALID_AS_OF", "as_of must be a real date: YYYY-MM-DD or a full ISO timestamp");
@@ -65,12 +74,16 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   const log = deps.log ?? (() => {});
   const scrub = deps.scrub ?? ((s: string) => s);
 
+  // The single scrub path: success and failure results both go through scrub() right before they
+  // leave the process. If you add a new tool, return through ok/fail and it is covered automatically.
   const ok = (data: unknown) => ({ content: [{ type: "text" as const, text: scrub(JSON.stringify(data)) }] });
   const fail = (code: string, message: string) => ({
     isError: true,
     content: [{ type: "text" as const, text: scrub(JSON.stringify({ code, message })) }],
   });
 
+  // Every tool is registered through this helper, so error handling and logging are identical.
+  // Expected problems (ToolError) keep their code; CLI failures become ADAPTY_UNAVAILABLE.
   /** Wraps a handler: ToolError and CLI failures become isError results. */
   function tool<S extends z.ZodRawShape>(
     name: string,
@@ -96,6 +109,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     });
   }
 
+  // Looks the test up in Adapty first, so a made-up id gets UNKNOWN_TEST instead of a confusing downstream error.
   async function resolveTest(testId: string): Promise<AbTestDetail> {
     const list = await cli.listTests();
     if (!list.some((t) => t.abTestId === testId)) {
@@ -104,6 +118,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     return cli.getTest(testId);
   }
 
+  // list_tests: what exists, its state, and the goal metric and horizon from the test plan.
   tool("list_tests", "List the app's Adapty A/B tests.", {}, async () => {
     const tests = await cli.listTests();
     return {
@@ -121,6 +136,8 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     };
   });
 
+  // judge_test: "does this test have a supported winner?" Read-only. With as_of it replays history
+  // (CSV only, because live Adapty numbers can't be rewound).
   tool(
     "judge_test",
     "Judge whether a test has a statistically supported winner. as_of replays the verdict at a past date (csv source only).",
@@ -141,6 +158,8 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     },
   );
 
+  // test_timeline: every weekly look vs the boundary. This is the tool that shows WHEN a winner was
+  // first supported, or that it never was.
   tool(
     "test_timeline",
     "Weekly looks of a test against the sequential boundary.",
@@ -151,6 +170,8 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     },
   );
 
+  // request_stop: the only way to try to change anything. It runs the judge once inside the gate. A
+  // winner becomes "pending" for a human; everything else is "blocked" with the reason.
   tool(
     "request_stop",
     "Ask to stop a live test with a declared winner. Fulcrum judges it first; a human must approve in the Fulcrum UI. There is no approve tool.",
@@ -170,12 +191,16 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
       if (!test.arms.some((arm) => arm.armId === a.winner_arm_id)) {
         throw new ToolError("UNKNOWN_ARM", `arm ${a.winner_arm_id} is not part of test ${a.test_id}`);
       }
+      // Adapty arms are identified by flow_id, but the CSV stores flow names. The plan maps one to the
+      // other (see engine.ts). Failing here is cheaper than judging the wrong arm.
       // With a plan, the requested arm must also map to a CSV flow through its Adapty flow name.
       const plan = planForTitle(plans, test.title);
       if (plan) {
         flowOfArm(plan, test, a.winner_arm_id);
         checkArmMapping(plan, test);
       }
+      // Hand over to the gate. The gate calls the same judge function exactly once for this request;
+      // the evidence below is read from that same result, so the answer can't contradict the decision.
       const r = await gate.requestStop({
         testId: a.test_id,
         winnerArmId: a.winner_arm_id,
@@ -183,6 +208,8 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
         rationale: a.rationale,
         ...(asOf ? { asOf } : {}),
       });
+      // Two cases. verdict UNKNOWN: the first request is still being judged, so say "retry in a moment".
+      // Otherwise a stop for this test is already waiting for a human, which is an error.
       if (r.code === "DUPLICATE_PENDING") {
         if (r.verdict === "UNKNOWN") {
           return {
@@ -222,6 +249,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     },
   );
 
+  // request_status: lets the agent poll whether the human approved. It is read-only, it can't approve.
   tool("request_status", "Check the status of a stop request.", { action_id: z.string() }, async (a) => {
     let v;
     try {

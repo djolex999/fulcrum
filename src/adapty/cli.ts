@@ -1,3 +1,7 @@
+// The only wrapper around the `adapty` CLI. The Adapty token must exist only inside this
+// process. It is handed to the CLI through the child's environment, never in argv (visible in
+// `ps`), never inherited, and anything that comes back is redacted before it can reach a log, error or the agent.
+
 import { execFile } from "node:child_process";
 import { redactSecrets } from "../safety/secrets.js";
 import type { AbTestDetail, AbTestState, AbTestSummary, ApprovedStop } from "./types.js";
@@ -17,6 +21,8 @@ export class AdaptyCliError extends Error {
   }
 }
 
+// execFile runs the binary with an args array and no shell, so values can't be turned into shell commands.
+// The env is passed explicitly: the child gets exactly what we give it and nothing from process.env.
 export const defaultRunner: Runner = (file, args, env) =>
   new Promise((resolve) => {
     execFile(file, args, { env, maxBuffer: 10 * 1024 * 1024 }, (error, stdout, stderr) => {
@@ -54,6 +60,7 @@ function toDetail(t: RawTest): AbTestDetail {
 export function createAdaptyCli(opts: { appId: string; token: string; run?: Runner; bin?: string }) {
   const run = opts.run ?? defaultRunner;
   const bin = opts.bin ?? "adapty";
+  // That is why the env is built by hand with just PATH, HOME and the token. Nothing else leaks to the child.
   // The token lives only in the child env: no argv, no inherited process.env.
   const env: Record<string, string> = {
     PATH: process.env.PATH ?? "",
@@ -61,6 +68,8 @@ export function createAdaptyCli(opts: { appId: string; token: string; run?: Runn
     ADAPTY_TOKEN: opts.token,
   };
 
+  // CLI error text can echo the token (a bad-auth message, a debug line). Cut out the exact token
+  // first, then run the general secret patterns, before the text goes into an Error.
   const redact = (text: string): string => {
     const withoutToken = opts.token ? text.split(opts.token).join("[REDACTED]") : text;
     return redactSecrets(withoutToken);
@@ -96,6 +105,8 @@ export function createAdaptyCli(opts: { appId: string; token: string; run?: Runn
     return toDetail(parse<RawTest>(out, "ab-tests get"));
   }
 
+  // The only write. Its parameter type ApprovedStop can only be built by the gate after a human approval,
+  // so no other code can compile a call to this. After stopping we re-read the test to confirm it.
   async function stopTest(action: ApprovedStop): Promise<AbTestDetail> {
     await exec([
       "ab-tests", "stop", action.abTestId,

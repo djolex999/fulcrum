@@ -1,3 +1,9 @@
+// Why a stopping boundary: if you check an A/B test every week and stop the first time p < 0.05,
+// you will call a winner on pure noise about 22% of the time (15 looks), not 5%.
+// The fix is a bar that is very strict early and relaxes late: |z| must beat c * sqrt(K / k).
+// This file builds that bar and PROVES the claim by simulating thousands of A/A tests
+// (no real difference), which is how c is chosen so false winners stay near 5%.
+
 /**
  * O'Brien-Fleming style stopping boundary and the peeking simulation behind AC-CALIB.
  *
@@ -13,12 +19,16 @@ const C_LOW = 1.5;
 const C_HIGH = 4;
 const BISECTIONS = 40;
 
+// The bar at look k of K. With c = 2.1 and K = 15: look 1 needs |z| >= 8.1 (nearly impossible, early
+// data is noisy), look 9 needs 2.71, look 15 needs 2.1. Late looks have more data, so we trust them more.
 export function boundary(c: number, K: number, k: number): number {
   if (!Number.isInteger(K) || K < 1) throw new RangeError(`K must be an integer >= 1, got ${K}`);
   if (!Number.isInteger(k) || k < 1 || k > K) throw new RangeError(`k must be an integer in 1..${K}, got ${k}`);
   return c * Math.sqrt(K / k);
 }
 
+// Seeded random numbers on purpose: the same seed gives the same sequence on every machine, so
+// the simulation, the c constants and the tests are reproducible instead of "usually about 5%".
 /** mulberry32: small seeded PRNG returning floats in [0, 1). */
 function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
@@ -76,12 +86,15 @@ function simulateStats(K: number, sims: number, seed: number): { maxAbsZ: Float6
   return { maxAbsZ, maxScaledZ };
 }
 
+// Share of simulated A/A tests that would have been called a (false) winner.
 function fractionAbove(values: Float64Array, threshold: number): number {
   let n = 0;
   for (const v of values) if (v > threshold) n++;
   return n / values.length;
 }
 
+// The proof behind AC-CALIB: run it with the naive rule (|z| > 1.96 at any weekly look, about 22%
+// false winners) and with the boundary (about 5%). Same simulated data, different stopping rule.
 export function simulateFalseWins(opts: {
   K: number;
   rule: { kind: "boundary"; c: number } | { kind: "naive" };
@@ -94,6 +107,8 @@ export function simulateFalseWins(opts: {
     : fractionAbove(maxScaledZ, opts.rule.c);
 }
 
+// calibrateC answers "how high must c be so only 5% of A/A tests ever cross?". It is a binary
+// search: try the middle value, if too many tests cross raise c, otherwise lower it.
 /**
  * Finds c such that the boundary's false-win rate is the target, by fixed-iteration bisection
  * (BISECTIONS = 40, no tolerance exit) on [1.5, 4] over CALIBRATION_SIMS (40,000) seeded sims

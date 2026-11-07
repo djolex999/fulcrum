@@ -1,3 +1,9 @@
+// The verdict engine: given a test plan and the offline CSV, decide WINNER, CONTINUE or NO_WINNER.
+// We look at the test once a week ("looks"), only on the test's declared goal metric, and only
+// count users who have lived through the full horizon. A winner must beat a strict early bar
+// (the boundary), so peeking every week does not hand out fake winners.
+// judgeTest answers "what is the verdict now / as of a date"; testTimeline shows every weekly look.
+
 import type { Dataset, User } from "../data/csv.js";
 import { boundary, C_TABLE, calibrateC } from "./boundary.js";
 import { FALLBACK_K, goalMetricOf, UnknownTestError } from "./plans.js";
@@ -57,6 +63,7 @@ export interface Timeline {
   source: "export_csv";
 }
 
+// The boundary constant c depends only on K, so we compute it once per K and reuse it.
 const cCache = new Map<number, number>();
 /** Boundary constant for K looks: the precomputed table, else a (memoized) simulation calibration. */
 export function cFor(K: number): number {
@@ -78,6 +85,7 @@ export interface PlanData {
   firstInstall: number;
 }
 
+// Picks the test's users from the CSV and splits them into the plan's two arms.
 export function planData(plan: TestPlan, data: Dataset): PlanData {
   const inTest = data.users.filter((u) => u.abTest === plan.title);
   if (inTest.length === 0) throw new UnknownTestError(plan.title);
@@ -95,10 +103,14 @@ export function planData(plan: TestPlan, data: Dataset): PlanData {
   return { users, firstInstall: anchor };
 }
 
+// Look k ends exactly k weeks after the first install DAY at 00:00 UTC (day-aligned). That is why a
+// date-only as_of such as "2026-08-16" lands exactly on a look instead of a few hours before it.
 export function lookEnd(pd: PlanData, k: number): Date {
   return new Date(pd.firstInstall + k * WEEK_MS);
 }
 
+// How many days of revenue each user must have lived through for this metric to count.
+// null = no horizon ("revenue to date"). Onboarding's goal is 60 days, Settings' is 30 days.
 function horizonOf(plan: TestPlan, metric: Metric): number | null {
   switch (metric) {
     case "rpi":
@@ -116,6 +128,7 @@ function horizonOf(plan: TestPlan, metric: Metric): number | null {
   }
 }
 
+// Result of one look: per-arm means, Welch z, naive p, the effect (B minus A) and who leads.
 interface LookStats {
   arms: ArmSummary[];
   z: number;
@@ -134,6 +147,8 @@ function armValues(plan: TestPlan, pd: PlanData, data: Dataset, metric: Metric, 
   return [out[0] as number[], out[1] as number[]];
 }
 
+// Returns null when either arm has fewer than 2 eligible users: too early to say anything.
+// That is how "the horizon" shows up: with a 60-day goal, nobody is eligible in the first 8 weeks.
 function lookStats(plan: TestPlan, pd: PlanData, data: Dataset, metric: Metric, cutoff: Date): LookStats | null {
   const [a, b] = armValues(plan, pd, data, metric, cutoff);
   if (a.length < 2 || b.length < 2) return null;
@@ -159,6 +174,7 @@ function armCounts(plan: TestPlan, pd: PlanData, data: Dataset, metric: Metric, 
   ];
 }
 
+// K = number of planned weekly looks. If the plan has none we use a fallback and say so openly.
 function kInfo(plan: TestPlan): { K: number; KSource: "test_plan" | "fallback" } {
   return plan.K === undefined ? { K: FALLBACK_K, KSource: "fallback" } : { K: plan.K, KSource: "test_plan" };
 }
@@ -173,6 +189,14 @@ function firstValidLook(plan: TestPlan, pd: PlanData, data: Dataset, metric: Met
   return null;
 }
 
+// The decision, in order:
+// 1. Wrong metric -> refuse ("metric shopping"). Only the declared goal can win a test.
+// 2. as_of outside the data -> INVALID_AS_OF.
+// 3. No full week yet, or nobody has the full horizon -> BEFORE_HORIZON ("not yet").
+// 4. Otherwise compare |z| with the boundary: crossed = WINNER; not crossed = CONTINUE while looks
+//    remain, NO_WINNER at the last look.
+// Example, Onboarding (60-day goal): week 2 -> not yet, week 9 -> winner.
+// Replay (asOf) uses the same code with an earlier cutoff, so past and present can't disagree.
 export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; metric?: Metric }): Verdict {
   const pd = planData(plan, data);
   const goal = goalMetricOf(plan);
@@ -198,6 +222,8 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
     arms: [] as ArmSummary[],
   };
 
+  // Metric shopping: if the agent can pick whichever metric makes a variant look good, some metric
+  // will always look good. So we never judge anything but the goal from the test plan.
   if (opts.metric !== undefined && opts.metric !== goal) {
     return {
       ...empty,
@@ -209,6 +235,7 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
     };
   }
 
+  // No as_of means "now", which in an offline dataset is the end of the data.
   const cutoffRaw = opts.asOf ?? data.dataEnd;
   const first = new Date(pd.firstInstall);
   if (cutoffRaw.getTime() < pd.firstInstall || cutoffRaw.getTime() > data.dataEnd.getTime()) {
@@ -221,6 +248,7 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
     };
   }
 
+  // Only whole weeks count as looks. A date in the middle of week 9 is still look 8.
   const fullLooks = Math.floor((cutoffRaw.getTime() - pd.firstInstall) / WEEK_MS);
   if (fullLooks < 1) {
     return {
@@ -229,10 +257,14 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
       reasons: [`No full weekly look has ended by ${isoDate(cutoffRaw)}; look 1 ends ${isoDate(lookEnd(pd, 1))}.`],
     };
   }
+  // Cap at K (k <= K): the plan only has K looks. If the data runs longer, the verdict is the one at
+  // the last planned look; later installs are mentioned in the reasons but not counted.
   const k = Math.min(fullLooks, K);
   const cutoff = lookEnd(pd, k);
   const stats = lookStats(plan, pd, data, goal, cutoff);
 
+  // Not enough eligible users yet (the horizon hasn't passed for them). Also reports which look is
+  // the first valid one, so the agent knows when to ask again.
   if (stats === null) {
     const firstValid = firstValidLook(plan, pd, data, goal, K);
     const horizonText = plan.horizonDays === null ? "revenue to date" : `${plan.horizonDays}-day revenue`;
@@ -250,9 +282,11 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
     };
   }
 
+  // Boundary check: the bar is c * sqrt(K / k), very high at look 1 and lowest at look K.
   const c = cFor(K);
   const bound = boundary(c, K, k);
   const crossed = Math.abs(stats.z) >= bound;
+  // WINNER if crossed. If not, CONTINUE while more looks remain, NO_WINNER once the last look has passed.
   const verdict: Verdict["verdict"] = crossed ? "WINNER" : k < K ? "CONTINUE" : "NO_WINNER";
   const where = `at look ${k} of ${K}`;
   const reasons = crossed
@@ -260,6 +294,7 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
     : [
         `z ${fmt(stats.z)} is below the boundary ${fmt(bound)} ${where}${k < K ? ": keep the test running." : ": last planned look reached, no winner."}`,
       ];
+  // The classic peeking trap: naive p < 0.05 but still under the boundary. We say so out loud.
   if (!crossed && stats.p < 0.05) {
     reasons.push(`Naive p = ${stats.p.toFixed(3)} is under 0.05, but repeated looks inflate false wins; the boundary is what counts.`);
   }
@@ -286,6 +321,12 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
   };
 }
 
+// Every weekly look in order, with z, boundary and whether it crossed. A non-goal metric is
+// allowed here for explanation but is never marked as crossed.
+// Two "end" views exist on purpose, and they can differ:
+// - looks[] stops at look K (the last PLANNED look), the same view judgeTest gives.
+// - end is computed on ALL data up to dataEnd, including installs after look K.
+// Example, Settings: about -$0.91 / p 0.41 at look 15, about -$0.68 / p 0.50 at the end of the data.
 export function testTimeline(plan: TestPlan, data: Dataset, opts: { metric?: Metric }): Timeline {
   const pd = planData(plan, data);
   const goal = goalMetricOf(plan);
@@ -293,6 +334,7 @@ export function testTimeline(plan: TestPlan, data: Dataset, opts: { metric?: Met
   const isGoal = metric === goal;
   const { K, KSource } = kInfo(plan);
   const c = cFor(K);
+  // Show only whole weeks, and never more than K.
   const lastFull = Math.min(K, Math.floor((data.dataEnd.getTime() - pd.firstInstall) / WEEK_MS));
 
   const looks: TimelineLook[] = [];
@@ -318,6 +360,7 @@ export function testTimeline(plan: TestPlan, data: Dataset, opts: { metric?: Met
     }
   }
 
+  // The "end" view: everything in the data, not only up to look K (see the note on testTimeline).
   const endStats = lookStats(plan, pd, data, metric, data.dataEnd);
   if (endStats === null) throw new Error(`Test "${plan.title}": no arm has 2 users with the ${metric} horizon by the end of the data`);
   return {

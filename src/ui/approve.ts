@@ -1,3 +1,8 @@
+// The human approval page (localhost only). The security goal: only the human, in their own browser,
+// can approve. The agent, even with shell access and curl, must not be able to.
+// Layers: bound to 127.0.0.1; Host check; a one-time login link that only the opened browser gets;
+// a cookie; a CSRF token on every button; an Origin check on every POST.
+
 import { execFile } from "node:child_process";
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { serve } from "@hono/node-server";
@@ -11,6 +16,7 @@ type Gate = ReturnType<typeof createGate>;
 
 const LEDGER_LIMIT = 20;
 
+// Everything shown on this page can come from the agent (rationale, reasons). Escape it all, or an agent could inject a fake Approve button.
 export function escapeHtml(value: unknown): string {
   return String(value)
     .replaceAll("&", "&amp;")
@@ -27,6 +33,7 @@ table{border-collapse:collapse;width:100%}td,th{border:1px solid #ccc;padding:.4
 .notice{background:#fff3cd;padding:.6rem;border:1px solid #e0c36c}</style></head><body>${body}</body></html>`;
 }
 
+// Constant-time comparison for secrets, so response timing can't leak a correct guess character by character.
 function safeEqual(a: string, b: string): boolean {
   const x = Buffer.from(a);
   const y = Buffer.from(b);
@@ -39,6 +46,7 @@ export interface ApprovalSecrets {
   csrfSecret: string;
 }
 
+// The login link is valid for 1 minute and once. If you miss it, restart Fulcrum for a new one.
 const LOGIN_TTL_MS = 60_000;
 
 const SESSION_COOKIE = "fulcrum_session";
@@ -62,6 +70,8 @@ function listPage(gate: Gate, csrf: string, notice?: string): string {
   return page("Fulcrum approvals", `<h1>Fulcrum: pending approvals</h1>${note}${table}<p><a href="/ledger">Ledger</a></p>`);
 }
 
+// Request path, in order: security headers -> Host check -> /login (one-time code, sets cookie)
+// -> everything else needs a valid session cookie -> POSTs also need the right Origin and a CSRF token.
 export function buildApprovalApp(
   gate: Gate,
   ledger: Ledger | undefined,
@@ -70,9 +80,11 @@ export function buildApprovalApp(
   const port = opts.port ?? 8787;
   const { csrfSecret } = opts;
   const now = opts.now ?? (() => Date.now());
+  // The login code exists only in this process's memory and in the URL that Fulcrum opens in the user's browser. The agent never sees it.
   let loginCode: string | null = opts.loginCode;
   const loginExpiresAt = now() + LOGIN_TTL_MS;
   const sessions = new Set<string>();
+  // CSRF token derived from the session id + a server secret. A page on another site can't guess it, so it can't submit the form for you.
   const csrfFor = (sessionId: string): string => createHmac("sha256", csrfSecret).update(sessionId).digest("hex");
   const sessionOf = (c: Context): string => getCookie(c, SESSION_COOKIE) ?? "";
   const { scrub } = createLogger("");
@@ -86,6 +98,7 @@ export function buildApprovalApp(
     c.header("Content-Security-Policy", "frame-ancestors 'none'");
   });
 
+  // Only accept Host: 127.0.0.1:<port> or localhost:<port>. Stops a malicious site from re-pointing its own domain at localhost and talking to us.
   // DNS-rebinding guard.
   app.use("*", async (c, next) => {
     const host = c.req.header("host");
@@ -99,9 +112,11 @@ export function buildApprovalApp(
     if (loginCode === null || now() > loginExpiresAt || !safeEqual(t, loginCode)) {
       return c.text("invalid or expired login link; restart Fulcrum for a new one", 401);
     }
+    // Burn the code immediately. Whoever used it first (the browser Fulcrum opened) is the only one who ever gets a session.
     loginCode = null; // single use
     const sessionId = randomBytes(32).toString("hex");
     sessions.add(sessionId);
+    // The cookie value is a fresh random id, NOT the login code. HttpOnly keeps page scripts away from it; SameSite=Strict keeps other sites from sending it.
     setCookie(c, SESSION_COOKIE, sessionId, { httpOnly: true, sameSite: "Strict", path: "/" });
     return c.redirect("/", 303);
   });
@@ -111,6 +126,7 @@ export function buildApprovalApp(
       return c.html(page("Fulcrum", "<p>Open the link Fulcrum opened in your browser.</p>"), 401);
     }
     if (c.req.method === "POST") {
+      // Browsers always send Origin on form POSTs. curl does not, unless the caller fakes it, and without the cookie and CSRF token that still fails.
       const origin = c.req.header("origin");
       if (origin === undefined || !allowedOrigins.has(origin)) return c.text("forbidden origin", 403);
     }
@@ -119,10 +135,12 @@ export function buildApprovalApp(
 
   app.get("/", (c) => c.html(listPage(gate, csrfFor(sessionOf(c)))));
 
+  // Shared handler for the Approve and Reject buttons. The approver name typed here is what goes into the ledger as approved_by.
   async function decide(c: Context, kind: "approve" | "reject") {
     const id = c.req.param("id") ?? "";
     const body = await c.req.parseBody();
     const csrf = body["csrf"];
+    // Second line of defence after the Origin check: the token must match THIS session.
     if (typeof csrf !== "string" || !safeEqual(csrf, csrfFor(sessionOf(c)))) return c.text("bad csrf token", 403);
     const raw = body["name"];
     const name = typeof raw === "string" ? raw.trim() : "";
@@ -168,6 +186,7 @@ export function buildApprovalApp(
   return app;
 }
 
+// Starts the server. Both secrets are random per run and never logged, so restarting Fulcrum invalidates every old link and session.
 export function startApprovalPage(
   gate: Gate,
   port = 8787,
@@ -180,10 +199,12 @@ export function startApprovalPage(
   const csrfSecret = randomBytes(32).toString("hex");
   const app = buildApprovalApp(gate, ledger, { port, loginCode, csrfSecret });
   let failed = false;
+  // Listen on 127.0.0.1 only, never 0.0.0.0, so nothing on the network can reach the page.
   const server = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, () => {
     if (failed) return;
     log(`approval page on http://127.0.0.1:${port}`);
     if (process.env.FULCRUM_NO_BROWSER !== "1") {
+      // The login link goes straight to the browser via `open`, not to stdout or a log, so the agent can't read it from Fulcrum's output.
       openBrowser(`http://127.0.0.1:${port}/login?t=${loginCode}`);
     }
   });

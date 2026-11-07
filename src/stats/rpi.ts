@@ -1,3 +1,8 @@
+// Revenue per install (RPI): the number every verdict is built on. For each user we add up the
+// money they paid (minus refunds) inside the horizon, then compare the two arms with a Welch test.
+// The key rule is WHO is eligible at a given cutoff date, so a young user whose 60 days are not over
+// yet can't make an arm look worse (or better) than it will end up.
+
 import type { Txn, User } from "../data/csv.js";
 
 const DAY_MS = 86_400_000;
@@ -10,6 +15,9 @@ const DAY_MS = 86_400_000;
  * - A refund subtracts priceUsd if refundedAt <= cutoff and, with a horizon, refundedAt <= install + horizon.
  * - Non-payers are included with 0.
  */
+// Example, 60-day RPI at a cutoff: someone installed 70 days before is in (and counts only their
+// first 60 days of purchases); someone installed 20 days before is left out completely; someone
+// who never paid is in with 0. Leaving non-payers out would turn RPI into revenue per payer.
 export function userRevenue(
   users: User[],
   txns: Txn[],
@@ -33,6 +41,8 @@ export function userRevenue(
     const end = horizonMs === null ? cut : Math.min(cut, inst + horizonMs);
     if (x.purchasedAt.getTime() > end) continue;
     let net = x.priceUsd;
+    // A refund only cancels the purchase once it has happened inside the same window.
+    // So a refund that comes after the cutoff doesn't reduce revenue "as of" that cutoff.
     if (x.refundedAt !== null && x.refundedAt.getTime() <= end) net -= x.priceUsd;
     revenue.set(x.userId, (revenue.get(x.userId) ?? 0) + net);
   }
@@ -40,6 +50,7 @@ export function userRevenue(
 }
 
 /** Standard normal CDF via erfc (series for small arguments, continued fraction for the tail; ~1e-15 accuracy). */
+// Needed to turn a z-score into a p-value. Hand-written so the project has no stats dependency.
 export function normalCdf(x: number): number {
   return 0.5 * erfc(-x / Math.SQRT2);
 }
@@ -98,6 +109,9 @@ function meanVar(xs: number[]): { mean: number; variance: number } {
  * Degenerate rule: if either group has n < 2 or the standard error is 0, se = 0, z = 0, p = 1
  * (no evidence either way; never NaN). Empty groups have mean 0.
  */
+// z = (mean of B minus mean of A) divided by its standard error: how many "noise units" apart the arms are.
+// p = the chance of a gap at least this big if the arms were really identical. Computed once,
+// so it is "naive": the boundary in boundary.ts, not p, decides winners when you look weekly.
 export function welch(a: number[], b: number[]): WelchResult {
   const A = meanVar(a);
   const B = meanVar(b);
