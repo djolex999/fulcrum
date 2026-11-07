@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "fulcrum": {
+      "command": "npx",
+      "args": [
+        "tsx",
+        "../src/mcp/server.ts"
+      ]
+    }
+  }
+}

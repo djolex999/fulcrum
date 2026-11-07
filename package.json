@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:live": "vitest run --config vitest.live.config.ts",
-    "start": "tsx src/mcp/server.ts"
+    "start": "tsx src/mcp/server.ts",
+    "demo:backup": "tsx scripts/demo-backup.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
