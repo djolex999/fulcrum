@@ -12,7 +12,7 @@ import { AdaptyCliError } from "../adapty/cli.js";
 import type { createGate, Judge } from "../gate/pending.js";
 import type { Proposals } from "../gate/proposals.js";
 import { goalMetricOf, type TestPlan } from "../stats/plans.js";
-import { checkArmMapping, flowOfArm, planForTitle } from "./engine.js";
+import { checkArmMapping, flowOfArm, planForTitle, validArmsHint } from "./engine.js";
 import { ToolError } from "./errors.js";
 
 type Gate = ReturnType<typeof createGate>;
@@ -200,7 +200,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
         throw new ToolError("NOT_LIVE", `test ${a.test_id} is ${test.state}, only live tests can be stopped`);
       }
       if (!test.arms.some((arm) => arm.armId === a.winner_arm_id)) {
-        throw new ToolError("UNKNOWN_ARM", `arm ${a.winner_arm_id} is not part of test ${a.test_id}`);
+        throw new ToolError("UNKNOWN_ARM", `arm ${a.winner_arm_id} is not part of test ${a.test_id}. ${validArmsHint(test, planForTitle(plans, test.title))}`);
       }
       // Adapty arms are identified by flow_id, but the CSV stores flow names. The plan maps one to the
       // other (see engine.ts). Failing here is cheaper than judging the wrong arm.

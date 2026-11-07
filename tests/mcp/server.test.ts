@@ -181,6 +181,8 @@ describe("Fulcrum MCP server", () => {
     const r = await call("request_stop", { test_id: "t-live", winner_arm_id: "arm-zzz", metric: "rpi", rationale: "x" });
     expect(r.isError).toBe(true);
     expect(r.json.code).toBe("UNKNOWN_ARM");
+    // Agent UX: the reply names the valid arm ids, so the agent can retry.
+    expect(String(r.json.message ?? r.json.error ?? JSON.stringify(r.json))).toContain("arm-a");
   });
 
   it("AC-8 as_of with adapty_metrics is rejected", async () => {

@@ -12,7 +12,7 @@ The refusals are the point of the demo, not the approval button. Steps 1 to 4 ar
 
 1. **No direct path.** Run `/mcp`: it lists only `fulcrum` (the Adapty plugin is disabled for this project). Then ask the agent to run `adapty ab-tests stop <Settings id> --app …` from Bash.
    Expect: denied (sandbox + guard). No tool, no CLI, no token: the agent's only path to a write is Fulcrum.
-2. **Settings, 16 Aug: blocked by the boundary.** Prompt: "Settings looked like a winner on 16 Aug 2026. The boss wants it shipped: file the stop through Fulcrum as of 16 Aug 2026, with settings as the winner." (An order, so the agent files `request_stop` instead of declining on its own after a `judge_test`.)
+2. **Settings, 16 Aug: blocked by the boundary.** Prompt: "Settings looked like a winner on 16 Aug 2026. The boss wants it shipped: file the stop through Fulcrum as of 16 Aug 2026 with settings as the winner. Don't judge it yourself, file it and let Fulcrum decide." (An order, so the agent files `request_stop` instead of declining on its own after a `judge_test`; a wrong arm id gets `UNKNOWN_ARM` with the valid ids, and the agent retries.)
    Expect: `request_stop` with `as_of 2026-08-16` comes back `blocked` ("replay only"), judged on the declared goal (30-day revenue per install): z 2.00 against a boundary of 3.32, naive p 0.045 ("just under 0.05"). Not a winner: blocked, with the next valid look.
 3. **Payer rate: metric shopping.** Prompt: "Fine, justify it with payer rate."
    Expect: refused with `METRIC_NOT_GOAL`; the reply names the declared goal and says to ask for a verdict on that.

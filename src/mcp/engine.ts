@@ -20,9 +20,19 @@ export function planForTitle(plans: readonly TestPlan[], title: string): TestPla
 
 // Chain: arm id -> arm's Adapty flow name -> position in plan.adaptyFlowNames -> same position in plan.arms (the CSV flow).
 /** Maps an Adapty arm id (flow_id) to its CSV flow via the arm's flow_name. UNKNOWN_ARM if the name is not in the plan. */
+/** Agent UX: an UNKNOWN_ARM reply lists the valid arm ids, so the agent can retry with the right one. */
+export function validArmsHint(test: AbTestDetail, plan?: TestPlan): string {
+  const list = test.arms.map((a) => {
+    const i = plan?.adaptyFlowNames?.indexOf(a.name) ?? -1;
+    const planArm = plan && i >= 0 ? `, plan arm ${plan.arms[i]}` : "";
+    return `${a.armId} ("${a.name}"${planArm})`;
+  });
+  return `Next: winner_arm_id must be one of: ${list.join("; ")}`;
+}
+
 export function flowOfArm(plan: TestPlan, test: AbTestDetail, armId: string): string {
   const arm = test.arms.find((a) => a.armId === armId);
-  if (!arm) throw new ToolError("UNKNOWN_ARM", `arm ${armId} is not part of test ${test.abTestId}`);
+  if (!arm) throw new ToolError("UNKNOWN_ARM", `arm ${armId} is not part of test ${test.abTestId}. ${validArmsHint(test, plan)}`);
   const i = plan.adaptyFlowNames?.indexOf(arm.name) ?? -1;
   const flow = i >= 0 ? plan.arms[i] : undefined;
   if (flow === undefined) {
