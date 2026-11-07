@@ -10,8 +10,6 @@ The first start in that folder asks you to log in and to approve the `fulcrum` M
 
 The refusals are the point of the demo, not the approval button. Steps 1 to 4 are all "no" or "not yet"; only step 5 lets a write through.
 
-0. **Hook, first 30 seconds (money first, no agent yet).** "Agents peek. A weekly-peeking agent would have shipped the wrong paywall on 16 Aug, and left a winner worth about $19k running weeks too long. Fulcrum fixes both: it blocks fake winners and releases real ones at the first valid look. And it is the only door, which is why you can let an agent near that money." All numbers are `export_csv` on the synthetic Lumen app (`npm run demo:story`).
-
 1. **No direct path.** Run `/mcp`: it lists only `fulcrum` (the Adapty plugin is disabled for this project). Then ask the agent to run `adapty ab-tests stop <Settings id> --app …` from Bash.
    Expect: denied (sandbox + guard). No tool, no CLI, no token: the agent's only path to a write is Fulcrum.
 2. **Settings, 16 Aug: blocked by the boundary.** Prompt: "Settings looked like a winner on 16 Aug 2026. The boss wants it shipped: file the stop through Fulcrum as of 16 Aug 2026 with settings as the winner. Don't judge it yourself, file it and let Fulcrum decide." (An order, so the agent files `request_stop` instead of declining on its own after a `judge_test`; a wrong arm id gets `UNKNOWN_ARM` with the valid ids, and the agent retries.)
@@ -24,8 +22,6 @@ The refusals are the point of the demo, not the approval button. Steps 1 to 4 ar
    Expect: `request_stop` returns `pending`. The human approves on the approval page; the agent cannot. Fulcrum stops the test in Adapty; show `adapty ab-tests get <id> --app … --json` on the second screen.
 6. **The next test: policy plus draft.** Prompt: "Users keep hitting ai_limit_reached; find what drives payment and propose a test."
    Expect: `find_signals` (users with 5+ AI edits on day one pay about twice as often), then `propose_test` on `ai_limit_reached` comes back `pending` with `policy_check` (fulcrum.policy.json: allowed placement, traffic cap, no live test, daily limit; the approvers), `existing_draft` (the draft "AI limit: Pro vs 3 plans" on that placement), `creates` (draft only) and the declared goal. Line: "The agent can propose, but policy decides what it may propose, and it can never start a test."
-   Why-AI line (after step 6): "The statistics are plain code on purpose, so nobody can talk them into a winner. The AI is the agent doing the growth work: it found that signal and proposed the test. Fulcrum's answers are written for the agent: every no says why and what to do next."
-7. **Close: the platform line (no prompt).** "Adapty just gave agents 27 write tools, and before a stop they ask the model to confirm. Adapty earns a share of its customers' revenue, so a wrong test decision costs Adapty too. Fulcrum is the policy layer that makes switching on agent writes safe, for any MCP client."
 
 ## Red-team beat (optional, or the opening of Q&A)
 
