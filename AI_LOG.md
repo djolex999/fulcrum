@@ -111,6 +111,11 @@ Shortened paraphrases of the briefs; the point is what each one withholds or nar
 - **Found:** the core rule held on every path the reviewer could construct (a stop becomes pending only on WINNER for exactly the requested arm; replays, wrong arms, non-goal metrics, engine errors and unknown plans all block). Two hardening gaps: duplicate Adapty arm names could map to one flow, and the `evidence` shown to the agent came from a second judge call that could disagree with the decision after a transient error.
 - **What we changed:** the arm mapping must be one-to-one or it is refused as ambiguous, and `request_stop` makes one judge call whose result is both the decision and the evidence.
 
+### Closed loop, attack suite and demo safety (Sat 7 Nov, ~17:00–18:10, Fable + Sonnet + security plugin)
+
+- **Found:** `propose_test` passed the Fable review (no path to a create without a named policy approver; nothing in the new path can start or stop a test; the policy file fails closed in every malformed case tried). Both the review and an automated security check flagged that the "no live test on this placement" rule compared titles normalised differently at request and approval time; the attack-suite review found the backup script did not pass its port to the server it starts.
+- **What we changed:** the live-test rule matches by placement id (and fails closed if an id is unknown); the backup script forwards only its port, never the whole environment; the disguised-stop attack test was tightened.
+
 ## Phases
 
 One entry per build phase, written at the end of `phase-checkpoint` in Djordje's words.

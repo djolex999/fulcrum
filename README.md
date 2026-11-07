@@ -1,6 +1,6 @@
 # Fulcrum
 
-> **Status (Sat 7 Nov, evening):** built and tested: the MCP server, the approval gate and ledger, the human-only approval page, the isolated demo agent, and the verdict engine (declared goal, horizon, sequential boundary, `as_of` replay, metric-shopping refusal). In progress: `propose_test` (the agent proposes a new test through the same gate) and the policy file. Run `npm run demo:story` to see the evidence.
+> **Status (Sat 7 Nov, evening):** built and tested (188 tests, `npm test`): the MCP server and the only door (no tool, no CLI, no token for the agent), the approval gate and ledger, the human-only approval page, the verdict engine (declared goal, horizon, sequential boundary, `as_of` replay, metric-shopping refusal), and the closed loop: `find_signals` and `propose_test`, which after human approval creates a new test as a draft (starting it stays a human action in Adapty), under `fulcrum.policy.json`. `npm run demo:story` prints the evidence; `npm run test:attacks` runs the bypass and abuse tests.
 
 Fulcrum is the only door between AI agents and an Adapty account. There is no tool, no CLI and no token for the agent: its only path to a write is Fulcrum. Agents can read test data; every change passes the test's declared goal, a sequential stopping boundary and a human approval, and only then does Fulcrum execute it.
 
@@ -18,7 +18,7 @@ The result is shipped "winners" that never actually won.
 
 - **Approval gate:** the agent has no token, it only has requests. A request becomes pending only if the statistics say there is a winner for that exact arm, and only a human clicking Approve on the local page makes Fulcrum stop the test. Adapty's own MCP asks the model to confirm before a stop, which is just a prompt; Fulcrum adds the rule in code, plus statistics, a human approver and a ledger of every attempt.
 - **Verdict engine:** a test is judged only on its declared goal. For Onboarding that is 60-day revenue per install, so until users have been in the app for 60 days the answer is always "not yet"; the first week anyone qualifies is week 9, and that is where it crosses the boundary.
-- **Agent loop:** to be written during the event.
+- **Agent loop:** the agent reads tests and asks for verdicts through Fulcrum's tools; every reply ends with the next step. It can also find a signal in the data (`find_signals`: users with 5+ AI edits on day one pay about twice as often) and propose a new test through the same door (`propose_test`): policy check, human approval, then Fulcrum creates a draft.
 - **Stopping boundaries:** to be written during the event.
 
 ## Limitations
