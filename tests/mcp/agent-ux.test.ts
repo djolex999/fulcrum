@@ -9,9 +9,11 @@ import { DEFAULT_DATA_DIR, loadDataset } from "../../src/data/csv.js";
 import type { Dataset } from "../../src/data/csv.js";
 import { createLedger } from "../../src/gate/ledger.js";
 import { createGate } from "../../src/gate/pending.js";
+import { createProposals } from "../../src/gate/proposals.js";
 import { createEngine } from "../../src/mcp/engine.js";
 import { buildServer } from "../../src/mcp/server.js";
 import { loadPlans } from "../../src/stats/plans.js";
+import { aiEditSignal } from "../../src/stats/signals.js";
 
 const real = existsSync(DEFAULT_DATA_DIR);
 const DAY = 86_400_000;
@@ -57,10 +59,13 @@ async function setup() {
       return t;
     },
     stopTest: async () => ONB,
+    listPlacements: async () => [{ id: "pl-ai", developerId: "ai_limit_reached", title: "AI edits limit reached" }, { id: "pl-main", developerId: "main", title: "Main paywall" }],
+    listFlows: async () => [{ id: "fl-pro", name: "AI limit reached - Pro", status: "published" }, { id: "fl-3p", name: "Main - 3 plans", status: "published" }],
   };
   const { judge, timeline } = createEngine({ cli, plans, loadData: getData });
   const gate = createGate({ cli, ledger: createLedger(join(dir, "ledger.jsonl")), judge });
-  const server = buildServer({ cli, gate, judge, timeline, plans, approvalUrl: "http://127.0.0.1:8787/" });
+  const proposals = createProposals({ cli, ledger: createLedger(join(dir, "ledger.jsonl")), policy: { ok: true, policy: { approvers: ["Djordje"], allowedPlacements: ["ai_limit_reached"], maxChallengerWeight: 50, fallbackK: 15, fallbackHorizonDays: null, dailyWriteLimit: 5 } } });
+  const server = buildServer({ cli, gate, proposals, judge, timeline, signals: async () => ({ ...aiEditSignal(await getData()) }), plans, approvalUrl: "http://127.0.0.1:8787/" });
   const [a, b] = InMemoryTransport.createLinkedPair();
   const client = new Client({ name: "test", version: "0" });
   await Promise.all([server.connect(a), client.connect(b)]);
@@ -118,9 +123,21 @@ describe.skipIf(!real)("AGENT-UX every non-success reply names the next step", (
     expect(String(d.json.reason)).toContain("request_status");
     expect(String(d.json.reason)).toContain(String(d.json.action_id));
 
+    // (d2) propose_test: pending says the next step first; blocked cites the rule and says what to change.
+    const p = await call("propose_test", { placement: "ai_limit_reached", flows: ["fl-pro", "fl-3p"], audience: "all", hypothesis: "5+ edits users pay twice as often" });
+    expect(p.json.status).toBe("pending");
+    expect(String(p.json.reason)).toMatch(/^Next: a human must approve at .*127\.0\.0\.1.*poll request_status with action_id /);
+    const pb = await call("propose_test", { placement: "main", flows: ["fl-pro", "fl-3p"], audience: "all", hypothesis: "x" });
+    expect(pb.json).toMatchObject({ status: "blocked", policy_rule: "allowed_placements" });
+    expect(String(pb.json.reason)).toMatch(/propose the test on an allowed placement/);
+
+    // (d3) find_signals names the next step.
+    const fs = await call("find_signals");
+    expect(String(fs.json.next_step)).toContain("propose_test");
+
     // (e) Every tool description is non-empty and points at a next step.
     const { tools } = await client.listTools();
-    expect(tools.map((t) => t.name).sort()).toEqual(["judge_test", "list_tests", "request_status", "request_stop", "test_timeline"]);
+    expect(tools.map((t) => t.name).sort()).toEqual(["find_signals", "judge_test", "list_tests", "propose_test", "request_status", "request_stop", "test_timeline"]);
     for (const t of tools) {
       expect(t.description ?? "").not.toBe("");
       const last = (t.description ?? "").split(". ").map((x) => x.trim()).filter((x) => x !== "").pop() ?? "";

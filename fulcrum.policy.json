@@ -1,0 +1,8 @@
+{
+  "approvers": ["Djordje"],
+  "allowedPlacements": ["ai_limit_reached"],
+  "maxChallengerWeight": 50,
+  "fallbackK": 15,
+  "fallbackHorizonDays": null,
+  "dailyWriteLimit": 5
+}

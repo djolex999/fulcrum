@@ -10,6 +10,7 @@ import { Hono, type Context } from "hono";
 import { getCookie, setCookie } from "hono/cookie";
 import type { Ledger } from "../gate/ledger.js";
 import type { ActionView, createGate } from "../gate/pending.js";
+import type { ProposalView, Proposals } from "../gate/proposals.js";
 import { createLogger } from "../mcp/log.js";
 
 type Gate = ReturnType<typeof createGate>;
@@ -61,13 +62,30 @@ function pendingRow(a: ActionView, csrf: string): string {
 <button type="submit" formaction="/reject/${id}">Reject</button></form></td></tr>`;
 }
 
-function listPage(gate: Gate, csrf: string, notice?: string): string {
+// A proposed NEW test. Approving only creates it as a draft; starting it is a human decision in Adapty.
+function proposalRow(a: ProposalView, csrf: string): string {
+  const id = encodeURIComponent(a.actionId);
+  const flows = a.flows.map((f, i) => `${i === 0 ? "Control" : "Challenger"}: ${escapeHtml(f.flowName)} (${escapeHtml(f.flowId)}), ${escapeHtml(f.weight)}%`).join("<br>");
+  return `<tr><td>${escapeHtml(a.placement)}<br><small>${escapeHtml(a.placementTitle)}</small><br><small>${escapeHtml(a.actionId)}</small></td>
+<td>${flows}</td><td>${escapeHtml(a.audience)}</td><td>${escapeHtml(a.hypothesis)}</td>
+<td>${escapeHtml(a.reason)}</td><td>${escapeHtml(a.createdAt)}</td>
+<td><form method="post"><input type="hidden" name="csrf" value="${escapeHtml(csrf)}"><input name="name" placeholder="your name" required>
+<button type="submit" formaction="/proposals/${id}/approve">Approve: create draft</button>
+<button type="submit" formaction="/proposals/${id}/reject">Reject</button></form></td></tr>`;
+}
+
+function listPage(gate: Gate, csrf: string, notice?: string, proposals?: Proposals): string {
   const rows = gate.pending().map((a) => pendingRow(a, csrf)).join("");
+  const prows = (proposals?.pending() ?? []).map((a) => proposalRow(a, csrf)).join("");
   const note = notice ? `<p class="notice">${escapeHtml(notice)}</p>` : "";
   const table = rows
-    ? `<table><tr><th>Test</th><th>Winner arm</th><th>Metric</th><th>Verdict</th><th>Reason</th><th>Agent rationale</th><th>Created</th><th>Decision</th></tr>${rows}</table>`
-    : "<p>No pending actions.</p>";
-  return page("Fulcrum approvals", `<h1>Fulcrum: pending approvals</h1>${note}${table}<p><a href="/ledger">Ledger</a></p>`);
+    ? `<h2>Stop a test</h2><table><tr><th>Test</th><th>Winner arm</th><th>Metric</th><th>Verdict</th><th>Reason</th><th>Agent rationale</th><th>Created</th><th>Decision</th></tr>${rows}</table>`
+    : "";
+  const ptable = prows
+    ? `<h2>Proposed new tests</h2><p>Approving creates the test as a draft only; starting it is your decision in Adapty.</p><table><tr><th>Placement</th><th>Flows</th><th>Audience</th><th>Hypothesis</th><th>Policy</th><th>Created</th><th>Decision</th></tr>${prows}</table>`
+    : "";
+  const body = table + ptable || "<p>No pending actions.</p>";
+  return page("Fulcrum approvals", `<h1>Fulcrum: pending approvals</h1>${note}${body}<p><a href="/ledger">Ledger</a></p>`);
 }
 
 // Request path, in order: security headers -> Host check -> /login (one-time code, sets cookie)
@@ -75,10 +93,10 @@ function listPage(gate: Gate, csrf: string, notice?: string): string {
 export function buildApprovalApp(
   gate: Gate,
   ledger: Ledger | undefined,
-  opts: ApprovalSecrets & { port?: number; now?: () => number },
+  opts: ApprovalSecrets & { port?: number; now?: () => number; proposals?: Proposals },
 ): Hono {
   const port = opts.port ?? 8787;
-  const { csrfSecret } = opts;
+  const { csrfSecret, proposals } = opts;
   const now = opts.now ?? (() => Date.now());
   // The login code exists only in this process's memory and in the URL that Fulcrum opens in the user's browser. The agent never sees it.
   let loginCode: string | null = opts.loginCode;
@@ -133,7 +151,7 @@ export function buildApprovalApp(
     await next();
   });
 
-  app.get("/", (c) => c.html(listPage(gate, csrfFor(sessionOf(c)))));
+  app.get("/", (c) => c.html(listPage(gate, csrfFor(sessionOf(c)), undefined, proposals)));
 
   // Shared handler for the Approve and Reject buttons. The approver name typed here is what goes into the ledger as approved_by.
   async function decide(c: Context, kind: "approve" | "reject") {
@@ -157,15 +175,40 @@ export function buildApprovalApp(
       result = kind === "approve" ? await gate.approve(id, name) : gate.reject(id, name);
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      return c.html(listPage(gate, csrfFor(sessionOf(c)), `Refused: ${msg}`), 400);
+      return c.html(listPage(gate, csrfFor(sessionOf(c)), `Refused: ${msg}`, proposals), 400);
     }
     const done = kind === "approve" ? result.status === "executed" : result.status === "rejected";
     if (done) return c.redirect("/", 303);
-    return c.html(listPage(gate, csrfFor(sessionOf(c)), `Not ${kind === "approve" ? "executed" : "rejected"} (${result.status}): ${result.reason}`));
+    return c.html(listPage(gate, csrfFor(sessionOf(c)), `Not ${kind === "approve" ? "executed" : "rejected"} (${result.status}): ${result.reason}`, proposals));
   }
 
   app.post("/approve/:id", (c) => decide(c, "approve"));
   app.post("/reject/:id", (c) => decide(c, "reject"));
+
+  // Proposals use the same session, Origin and CSRF checks (the middleware above covers every POST).
+  async function decideProposal(c: Context, kind: "approve" | "reject") {
+    if (!proposals) return c.text("unknown action", 404);
+    const id = c.req.param("id") ?? "";
+    const body = await c.req.parseBody();
+    const csrf = body["csrf"];
+    if (typeof csrf !== "string" || !safeEqual(csrf, csrfFor(sessionOf(c)))) return c.text("bad csrf token", 403);
+    const raw = body["name"];
+    const name = typeof raw === "string" ? raw.trim() : "";
+    if (name === "") return c.text("approver name is required", 400);
+    if (!proposals.has(id)) return c.text("unknown action", 404);
+    let result: ProposalView;
+    try {
+      result = kind === "approve" ? await proposals.approve(id, name) : proposals.reject(id, name);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return c.html(listPage(gate, csrfFor(sessionOf(c)), scrub(`Refused: ${msg}`), proposals), 400);
+    }
+    const done = kind === "approve" ? result.status === "executed" : result.status === "rejected";
+    if (done) return c.redirect("/", 303);
+    return c.html(listPage(gate, csrfFor(sessionOf(c)), `Not ${kind === "approve" ? "executed" : "rejected"} (${result.status}): ${result.reason}`, proposals));
+  }
+  app.post("/proposals/:id/approve", (c) => decideProposal(c, "approve"));
+  app.post("/proposals/:id/reject", (c) => decideProposal(c, "reject"));
 
   app.get("/ledger", (c) => {
     const entries = (ledger?.all() ?? []).slice(-LEDGER_LIMIT).reverse();
@@ -193,11 +236,12 @@ export function startApprovalPage(
   ledger?: Ledger,
   log: (message: string) => void = createLogger("").log,
   openBrowser: (url: string) => void = defaultOpen(log),
+  proposals?: Proposals,
 ): void {
   // In memory only: never logged, written or printed.
   const loginCode = randomBytes(32).toString("hex");
   const csrfSecret = randomBytes(32).toString("hex");
-  const app = buildApprovalApp(gate, ledger, { port, loginCode, csrfSecret });
+  const app = buildApprovalApp(gate, ledger, { port, loginCode, csrfSecret, ...(proposals ? { proposals } : {}) });
   let failed = false;
   // Listen on 127.0.0.1 only, never 0.0.0.0, so nothing on the network can reach the page.
   const server = serve({ fetch: app.fetch, port, hostname: "127.0.0.1" }, () => {

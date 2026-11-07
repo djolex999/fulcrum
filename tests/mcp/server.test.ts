@@ -87,10 +87,10 @@ async function setup(judge: Judge = placeholderJudge) {
 }
 
 describe("Fulcrum MCP server", () => {
-  it("tools are exactly the five in SPEC.md, no approve tool", async () => {
+  it("tools are exactly the seven in SPEC.md, no approve tool", async () => {
     const { client } = await setup();
     const names = (await client.listTools()).tools.map((t) => t.name).sort();
-    expect(names).toEqual(["judge_test", "list_tests", "request_status", "request_stop", "test_timeline"]);
+    expect(names).toEqual(["find_signals", "judge_test", "list_tests", "propose_test", "request_status", "request_stop", "test_timeline"]);
     expect(names.some((n) => /approve/i.test(n))).toBe(false);
   });
 

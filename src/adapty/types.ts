@@ -20,3 +20,29 @@ export type ApprovedStop = {
   abTestId: string;
   winnerArmId: string;
 };
+
+export type Audience = "all" | { segmentId: string };
+
+/** Constructible only by the proposal queue (src/gate/proposals.ts), after a human approved a proposed test. */
+export type ApprovedCreate = {
+  readonly [approvedBrand]: true;
+  placementId: string;
+  /** Two arms: the control first, the challenger second. Weights add up to 100. */
+  flows: [{ flowId: string; weight: number; title: string }, { flowId: string; weight: number; title: string }];
+  audience: Audience;
+  title: string;
+  goal: string;
+};
+
+export interface Placement {
+  id: string;
+  /** The name the code uses, e.g. "ai_limit_reached". Policy allows placements by this. */
+  developerId: string;
+  title: string;
+}
+
+export interface Flow {
+  id: string;
+  name: string;
+  status: string;
+}

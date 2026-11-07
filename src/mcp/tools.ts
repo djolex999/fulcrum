@@ -1,5 +1,5 @@
 // The tools the AI agent sees (MCP). Agent-centred on purpose: the agent can read tests, ask for
-// a verdict, see the weekly timeline, ask to stop a test and poll the request status.
+// a verdict, see the weekly timeline, ask to stop a test, look for signals, propose a new test and poll the request status.
 // There is NO approve tool. Approval only exists on the human web page (src/ui/approve.ts),
 // so a prompt-injected or confused agent cannot approve its own request.
 // Every tool result passes through one scrub function, so a secret can't leave through any tool.
@@ -10,6 +10,7 @@ import type { AdaptyCli } from "../adapty/cli.js";
 import type { AbTestDetail } from "../adapty/types.js";
 import { AdaptyCliError } from "../adapty/cli.js";
 import type { createGate, Judge } from "../gate/pending.js";
+import type { Proposals } from "../gate/proposals.js";
 import { goalMetricOf, type TestPlan } from "../stats/plans.js";
 import { checkArmMapping, flowOfArm, planForTitle } from "./engine.js";
 import { ToolError } from "./errors.js";
@@ -40,10 +41,15 @@ export const placeholderTimeline: TimelineFn = async () => {
 };
 
 export interface ToolDeps {
-  cli: Pick<AdaptyCli, "listTests" | "getTest">;
+  // listPlacements and listFlows are needed by propose_test only; without them it answers NOT_IMPLEMENTED.
+  cli: Pick<AdaptyCli, "listTests" | "getTest"> & Partial<Pick<AdaptyCli, "listPlacements" | "listFlows">>;
   gate: Gate;
+  /** The queue for proposed new tests. Without it propose_test answers NOT_IMPLEMENTED. */
+  proposals?: Proposals;
   judge: JudgeFn;
   timeline: TimelineFn;
+  /** The AI-edit signal for find_signals (read-only). Without it find_signals answers NOT_IMPLEMENTED. */
+  signals?: () => Promise<Record<string, unknown>>;
   /** Test plans, joined to Adapty tests by title (list_tests goal and horizon; arm mapping check). */
   plans?: readonly TestPlan[];
   /** Where the human approves (shown to the agent in a pending reply). Defaults to the default port. */
@@ -259,8 +265,93 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
     },
   );
 
+  // find_signals: read-only. Where do users who do more of something pay more? That is where a new test is worth proposing.
+  tool(
+    "find_signals",
+    "Read-only. Pay rate (share of users with a paid purchase, net of refunds) by AI edits on day one: 0, 1-4, 5+, with the number of users in each. If a segment converts much better, use propose_test on a placement those users see.",
+    {},
+    async () => {
+      if (!deps.signals) throw new ToolError("NOT_IMPLEMENTED", "find_signals has no data source configured");
+      const signal = await deps.signals();
+      return {
+        ...signal,
+        next_step: "If a segment converts much better, consider propose_test on a placement those users see.",
+      };
+    },
+  );
+
+  // propose_test: the closed loop. The agent proposes a NEW test; Fulcrum checks policy and queues it for a
+  // human. Nothing is created until a human approves; then Fulcrum creates the draft and starts it.
+  tool(
+    "propose_test",
+    "Propose a new A/B test on a placement (Fulcrum only ever creates it as a draft; starting it is a human decision in Adapty): two flow ids (control first, challenger second), the challenger's traffic share in percent, an audience (all or a segment id) and a hypothesis. Fulcrum checks policy (allowed placement, max challenger weight, no live test there, daily write limit); a human must approve at the approval page. There is no approve tool. Use placement and flow ids or names from Adapty; blocked replies cite the policy rule, pending ones say to poll request_status.",
+    {
+      placement: z.string().min(1),
+      flows: z.tuple([z.string().min(1), z.string().min(1)]),
+      challenger_weight: z.number().int().min(1).max(99).default(50),
+      audience: z.string().regex(/^(all|[A-Za-z0-9][A-Za-z0-9_-]{0,63})$/, 'audience must be "all" or a segment id'),
+      hypothesis: z.string().min(1).max(500),
+    },
+    async (a) => {
+      if (!deps.proposals || !cli.listPlacements || !cli.listFlows) throw new ToolError("NOT_IMPLEMENTED", "propose_test cannot look up placements and flows here");
+      const [placements, flows] = await Promise.all([cli.listPlacements(), cli.listFlows()]);
+      const placement = placements.find((p) => p.id === a.placement || p.developerId === a.placement);
+      if (!placement) {
+        throw new ToolError("UNKNOWN_PLACEMENT", `no placement ${a.placement}; known: ${placements.map((p) => p.developerId).join(", ")}`);
+      }
+      const [flowA, flowB] = a.flows.map((ref) => {
+        const f = flows.find((x) => x.id === ref || x.name === ref);
+        if (!f) throw new ToolError("UNKNOWN_FLOW", `no flow ${ref}; known: ${flows.map((x) => `${x.name} (${x.id})`).join(", ")}`);
+        return f;
+      }) as [(typeof flows)[number], (typeof flows)[number]];
+      if (flowA.id === flowB.id) throw new ToolError("INVALID_FLOWS", "a test needs two different flows");
+
+      const r = await deps.proposals.requestProposal({
+        placement,
+        flows: [
+          { flowId: flowA.id, flowName: flowA.name },
+          { flowId: flowB.id, flowName: flowB.name },
+        ],
+        challengerWeight: a.challenger_weight,
+        audience: a.audience === "all" ? "all" : { segmentId: a.audience },
+        hypothesis: a.hypothesis,
+        title: `${placement.title}: ${flowA.name} vs ${flowB.name}`,
+      });
+      if (r.code === "DUPLICATE_PENDING") {
+        if (r.policyRule === "in_progress") {
+          return { action_id: r.actionId, status: "blocked", reason: "request in progress, retry propose_test in a moment" };
+        }
+        throw new ToolError("DUPLICATE_PENDING", `action ${r.actionId} is already pending for this placement; poll request_status with it`);
+      }
+      return {
+        action_id: r.actionId,
+        status: r.status,
+        ...(r.policyRule ? { policy_rule: r.policyRule } : {}),
+        reason:
+          r.status === "pending"
+            ? `Next: a human must approve at ${approvalUrl}; poll request_status with action_id ${r.actionId}. ${r.reason}`
+            : r.reason,
+        ...(r.notes.length > 0 ? { existing_draft: r.notes } : {}),
+      };
+    },
+  );
+
   // request_status: lets the agent poll whether the human approved. It is read-only, it can't approve.
-  tool("request_status", "Check the status of a stop request. pending: keep polling; executed: done; blocked or expired: ask judge_test and request_stop again if still warranted.", { action_id: z.string() }, async (a) => {
+  tool("request_status", "Check the status of a stop or test request. pending: keep polling; executed: done (a proposed test is a draft, a human starts it in Adapty); failed: do not retry, tell the human; blocked or expired: ask judge_test (stops) or propose_test again if still warranted.", { action_id: z.string() }, async (a) => {
+    if (deps.proposals?.has(a.action_id)) {
+      const v = deps.proposals.status(a.action_id);
+      return {
+        action_id: v.actionId,
+        kind: "propose_test",
+        status: v.status,
+        reason: v.reason,
+        ...(v.createdTestId !== undefined ? { created_test_id: v.createdTestId } : {}),
+        ...(v.policyRule !== undefined ? { policy_rule: v.policyRule } : {}),
+        ...(v.approvedBy !== undefined ? { approved_by: v.approvedBy } : {}),
+        ...(v.executedAt !== undefined ? { executed_at: v.executedAt } : {}),
+        ...(v.cliExit !== undefined ? { cli_result: { exit: v.cliExit } } : {}),
+      };
+    }
     let v;
     try {
       v = gate.status(a.action_id);

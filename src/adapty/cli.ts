@@ -4,7 +4,7 @@
 
 import { execFile } from "node:child_process";
 import { redactSecrets } from "../safety/secrets.js";
-import type { AbTestDetail, AbTestState, AbTestSummary, ApprovedStop } from "./types.js";
+import type { AbTestDetail, AbTestState, AbTestSummary, ApprovedCreate, ApprovedStop, Flow, Placement } from "./types.js";
 
 export type Runner = (
   file: string,
@@ -117,7 +117,55 @@ export function createAdaptyCli(opts: { appId: string; token: string; run?: Runn
     return getTest(action.abTestId);
   }
 
-  return { listTests, getTest, stopTest };
+  // Read-only lookups used to validate a proposal. Parsing is tolerant: a row missing an id is skipped
+  // rather than guessed. Only the first page is read (the app has a handful of each).
+  async function listPlacements(): Promise<Placement[]> {
+    const out = await exec(["placements", "list", "--app", opts.appId, "--json"]);
+    const rows = parse<{ data?: Record<string, unknown>[] }>(out, "placements list").data ?? [];
+    return rows.flatMap((r) =>
+      typeof r.id === "string" && typeof r.developer_id === "string"
+        ? [{ id: r.id, developerId: r.developer_id, title: typeof r.title === "string" ? r.title : r.developer_id }]
+        : [],
+    );
+  }
+
+  async function listFlows(): Promise<Flow[]> {
+    const out = await exec(["flows", "list", "--app", opts.appId, "--json"]);
+    const rows = parse<{ data?: Record<string, unknown>[] }>(out, "flows list").data ?? [];
+    return rows.flatMap((r) =>
+      typeof r.id === "string" && typeof r.name === "string"
+        ? [{ id: r.id, name: r.name, status: typeof r.status === "string" ? r.status : "unknown" }]
+        : [],
+    );
+  }
+
+  const audienceArgs = (a: ApprovedCreate): string[] =>
+    a.audience === "all" ? ["--all-users"] : ["--segment", a.audience.segmentId];
+
+  // The only create. Like stopTest, ApprovedCreate can only be built by the proposal queue after a human
+  // approval. It creates a DRAFT (nothing goes live); starting it stays a human decision in Adapty. The id is read tolerantly from the response, and
+  // if it can't be found we fail closed: starting something we cannot name is never an option.
+  async function createTest(a: ApprovedCreate): Promise<{ abTestId: string }> {
+    const flows = JSON.stringify(a.flows.map((f) => ({ flow_id: f.flowId, weight: f.weight, title: f.title })));
+    const out = await exec([
+      "ab-tests", "create",
+      "--app", opts.appId,
+      "--title", a.title,
+      "--placement", a.placementId,
+      "--flows", flows,
+      "--goal", a.goal,
+      ...audienceArgs(a),
+      "--json",
+    ]);
+    const raw = parse<{ ab_test_id?: unknown; data?: { ab_test_id?: unknown } }>(out, "ab-tests create");
+    const id = raw.ab_test_id ?? raw.data?.ab_test_id;
+    if (typeof id !== "string" || id === "") {
+      throw new AdaptyCliError("adapty ab-tests create succeeded but the response has no ab_test_id; check Adapty for a draft test", 0);
+    }
+    return { abTestId: id };
+  }
+
+  return { listTests, getTest, stopTest, listPlacements, listFlows, createTest };
 }
 
 export type AdaptyCli = ReturnType<typeof createAdaptyCli>;
