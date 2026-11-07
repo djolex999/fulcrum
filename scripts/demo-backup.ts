@@ -14,6 +14,9 @@ async function show(client: Client, name: string, args: Record<string, unknown>)
 }
 
 async function main(): Promise<void> {
+  if (TEST_ID === "REPLACE_ME" || ARM_ID === "REPLACE_ME") {
+    throw new Error("Set DEMO_TEST_ID and DEMO_ARM_ID (the Settings test and its winning arm) before running npm run demo:backup.");
+  }
   const transport = new StdioClientTransport({
     command: "npx",
     args: ["tsx", "src/mcp/server.ts"],

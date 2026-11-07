@@ -78,5 +78,20 @@ expect deny  "port via variable path /reject/"   Bash "$(bash_cmd 'curl -X POST 
 expect deny  "login path"                        Bash "$(bash_cmd 'curl http://127.0.0.1:$PORT/login')"
 expect allow "npm test"                          Bash "$(bash_cmd "npm test")"
 
+# Demo agent (CLAUDE_PROJECT_DIR ends in /demo): no writes outside demo/
+REPO="$(cd "$(dirname "$HOOK")/../.." && pwd)"
+export CLAUDE_PROJECT_DIR="$REPO/demo"
+expect deny  "demo: redirect into ../src"        Bash "$(bash_cmd "echo x > ../src/gate/pending.ts")"
+expect deny  "demo: sed -i on ../.claude"        Bash "$(bash_cmd "sed -i '' s/a/b/ ../.claude/hooks/guard.sh")"
+expect deny  "demo: cp over ../src"              Bash "$(bash_cmd "cp evil.ts ../src/mcp/tools.ts")"
+expect deny  "demo: cd .. then redirect"         Bash "$(bash_cmd "cd .. && echo x > src/a.ts")"
+expect deny  "demo: rm by absolute repo path"    Bash "$(bash_cmd "rm -rf $REPO/node_modules")"
+expect allow "demo: ls ../src"                   Bash "$(bash_cmd "ls ../src")"
+expect allow "demo: write inside demo/"          Bash "$(bash_cmd "echo x > notes.txt")"
+export CLAUDE_PROJECT_DIR="$REPO"
+expect allow "root: redirect to src/tmp.txt"     Bash "$(bash_cmd "echo x > src/tmp.txt")"
+expect allow "root: sed -i ../ not affected"     Bash "$(bash_cmd "sed -i '' s/a/b/ ../x.txt")"
+unset CLAUDE_PROJECT_DIR
+
 [ "$fail" = 0 ] && echo "ALL PASS" || echo "SOME FAILED"
 exit $fail

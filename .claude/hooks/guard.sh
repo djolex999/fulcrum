@@ -52,6 +52,19 @@ def is_adapty(t):
     base = os.path.basename(t.split("@", 1)[0]) if not t.startswith("@") else t
     return base == "adapty" or "adapty/bin" in t
 
+PROJECT_DIR = os.environ.get("CLAUDE_PROJECT_DIR", "").rstrip("/")
+DEMO = PROJECT_DIR.endswith("/demo")
+REPO_ROOT = os.path.dirname(PROJECT_DIR) if DEMO else ""
+# Demo agent only: write-shaped commands that reach outside demo/ (Fulcrum code, guard, settings).
+WRITE_SHAPE = re.compile(r"(?<![0-9&])>(?!&|\s*/dev/null)|(?<![A-Za-z0-9_./-])(tee|cp|mv|rm|rmdir|chmod|chown|ln|install|dd|truncate|touch|mkdir|patch|rsync|perl|ed|ex|vi|vim|nano)(?![A-Za-z0-9_-])"
+                         r"|sed\s+(-[A-Za-z]*i|--in-place)|git\s+(checkout|restore|apply|reset|clean|stash|mv|rm|am|merge|rebase|pull)"
+                         r"|(npm|pnpm|yarn)\s+(install|i|ci|add|uninstall|remove|rm|update)|npx\b.*\binstall\b")
+
+def check_demo_tamper(cmd):
+    outside = re.search(r"\.\./|\.\.(?=\s|$|[;&|)])", cmd) or (REPO_ROOT and REPO_ROOT in cmd)
+    if outside and WRITE_SHAPE.search(cmd):
+        deny("the demo agent may not write outside demo/ (Fulcrum code, guard and settings are off limits).")
+
 def check_cmd(cmd, depth=0):
     if depth > 3:
         deny("command nesting too deep to check")
@@ -109,6 +122,8 @@ try:
     tool = event.get("tool_name", "")
     tin = event.get("tool_input") or {}
     if tool == "Bash":
+        if DEMO:
+            check_demo_tamper(str(tin.get("command", "")))
         check_cmd(str(tin.get("command", "")))
     else:
         for key in ("file_path", "path", "glob", "pattern" if tool == "Glob" else ""):

@@ -82,13 +82,17 @@
       "mcp__plugin_adapty-skills_adapty__apps_get",
       "mcp__plugin_adapty-skills_adapty__feedback_send",
       "Read(../.env)",
-      "Read(../.env.*)"
+      "Read(../.env.*)",
+      "Edit",
+      "Write",
+      "MultiEdit",
+      "NotebookEdit"
     ]
   },
   "hooks": {
     "PreToolUse": [
       {
-        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit",
+        "matcher": "Bash|Read|Grep|Glob|Edit|Write|MultiEdit|NotebookEdit",
         "hooks": [
           {
             "type": "command",

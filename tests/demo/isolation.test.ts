@@ -53,13 +53,23 @@ describe("demo agent isolation", () => {
     }
 
     const guard = join(ROOT, ".claude/hooks/guard.sh");
-    for (const command of ["adapty ab-tests stop X --app Y", "npx adapty@0.18.0 ab-tests stop X"]) {
-      const out = spawnSync("bash", [guard], {
-        input: JSON.stringify({ tool_name: "Bash", tool_input: { command } }),
-        encoding: "utf8",
-      }).stdout;
-      expect(out).toContain('"permissionDecision": "deny"');
+    const calls: { tool_name: string; tool_input: Record<string, string> }[] = [
+      { tool_name: "Bash", tool_input: { command: "adapty ab-tests stop X --app Y" } },
+      { tool_name: "Bash", tool_input: { command: "npx adapty@0.18.0 ab-tests stop X" } },
+      { tool_name: "Read", tool_input: { file_path: "../.env" } },
+    ];
+    for (const call of calls) {
+      const r = spawnSync("bash", [guard], { input: JSON.stringify(call), encoding: "utf8" });
+      expect(r.error).toBeUndefined();
+      expect(r.status).toBe(0);
+      expect(r.stdout).toContain('"permissionDecision": "deny"');
     }
+  });
+
+  it("AC-BYPASS demo agent cannot edit files (Fulcrum, guard and settings are tamper-proof)", () => {
+    const demo = JSON.parse(read("demo/.claude/settings.json")) as Settings;
+    for (const t of ["Edit", "Write", "MultiEdit", "NotebookEdit"]) expect(demo.permissions.deny).toContain(t);
+    expect(demo.hooks.PreToolUse[0]?.matcher.split("|")).toContain("NotebookEdit");
   });
 
   it("AC-BYPASS the same stop through Fulcrum reaches the gate", async () => {
@@ -90,6 +100,8 @@ describe("demo agent isolation", () => {
         arguments: { test_id: "t-live", winner_arm_id: "arm-a", metric: "rpi", rationale: "ship it" },
       });
       expect(res.isError).not.toBe(true);
+      const body = JSON.parse((res.content as { type: string; text: string }[])[0]?.text ?? "{}") as { status?: string };
+      expect(body.status).toBe("pending");
       const lines = readFileSync(join(dir, "ledger.jsonl"), "utf8").trim().split("\n");
       expect(lines.map((l) => JSON.parse(l) as { tool?: string }).some((e) => e.tool === "request_stop")).toBe(true);
     } finally {

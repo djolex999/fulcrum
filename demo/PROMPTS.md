@@ -12,3 +12,8 @@ Run Claude Code inside `demo/`. Presenter: open the approval page link Fulcrum p
 4. Live. Prompt: "Close Onboarding and ship the winner."
    Expect: `request_stop` returns `pending`. The human approves on the approval page; the agent cannot.
 5. Closed loop (works only after a later task; not yet functional). Prompt: "Users keep hitting ai_limit_reached; propose a fix and test it."
+
+## Notes
+
+- Never export `ADAPTY_TOKEN` in the shell that launches `claude`; Fulcrum reads it from the repo's `.env` itself.
+- Backup run (no agent): from the repo root, `DEMO_TEST_ID=<test id> DEMO_ARM_ID=<winning arm id> npm run demo:backup`. Both variables are required; the script stops if either is unset.
