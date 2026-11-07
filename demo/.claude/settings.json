@@ -108,6 +108,15 @@
     "enabled": true,
     "autoAllowBashIfSandboxed": true,
     "allowUnsandboxedCommands": false,
-    "failIfUnavailable": true
+    "failIfUnavailable": true,
+    "filesystem": {
+      "denyWrite": [
+        ".claude",
+        ".mcp.json",
+        "CLAUDE.md",
+        "node_modules",
+        "package.json"
+      ]
+    }
   }
 }

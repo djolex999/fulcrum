@@ -1,9 +1,9 @@
 {
   "mcpServers": {
     "fulcrum": {
-      "command": "npx",
+      "command": "node",
       "args": [
-        "tsx",
+        "../node_modules/tsx/dist/cli.mjs",
         "../src/mcp/server.ts"
       ]
     }

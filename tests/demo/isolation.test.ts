@@ -1,5 +1,5 @@
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
@@ -26,8 +26,9 @@ describe("demo agent isolation", () => {
     const cfg = JSON.parse(raw) as { mcpServers: Record<string, { command: string; args: string[]; env?: unknown }> };
     expect(Object.keys(cfg.mcpServers)).toEqual(["fulcrum"]);
     const s = cfg.mcpServers.fulcrum;
-    expect(s?.command).toBe("npx");
-    expect(s?.args).toEqual(["tsx", "../src/mcp/server.ts"]);
+    expect(s?.command).toBe("node");
+    expect(s?.args).toEqual(["../node_modules/tsx/dist/cli.mjs", "../src/mcp/server.ts"]);
+    expect(existsSync(join(ROOT, "node_modules/tsx/dist/cli.mjs"))).toBe(true);
     expect(s).not.toHaveProperty("env");
     expect(raw).not.toMatch(/TOKEN|KEY|SECRET/i);
   });
@@ -68,7 +69,7 @@ describe("demo agent isolation", () => {
 
   it("AC-BYPASS demo sandbox is enabled and cannot be escaped", () => {
     const demo = JSON.parse(read("demo/.claude/settings.json")) as {
-      sandbox?: { enabled?: boolean; allowUnsandboxedCommands?: boolean; failIfUnavailable?: boolean; excludedCommands?: unknown; network?: { allowLocalBinding?: boolean } };
+      sandbox?: { enabled?: boolean; allowUnsandboxedCommands?: boolean; failIfUnavailable?: boolean; excludedCommands?: unknown; filesystem?: { denyWrite?: string[] }; network?: { allowLocalBinding?: boolean } };
       permissions: { blockWritesOutsideWorkingDirectories?: boolean };
     };
     expect(demo.sandbox?.enabled).toBe(true);
@@ -76,6 +77,7 @@ describe("demo agent isolation", () => {
     expect(demo.sandbox?.failIfUnavailable).toBe(true);
     expect(demo.sandbox?.network?.allowLocalBinding).not.toBe(true);
     expect(demo.sandbox?.excludedCommands).toBeUndefined();
+    for (const e of [".claude", ".mcp.json", "CLAUDE.md", "node_modules", "package.json"]) expect(demo.sandbox?.filesystem?.denyWrite).toContain(e);
     expect(demo.permissions.blockWritesOutsideWorkingDirectories).toBe(true);
   });
 
