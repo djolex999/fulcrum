@@ -55,6 +55,8 @@ def is_adapty(t):
 def check_cmd(cmd, depth=0):
     if depth > 3:
         deny("command nesting too deep to check")
+    if re.search(r"127\.0\.0\.1:8787|localhost:8787|\[::1\]:8787|/approve/|/login\?t=", cmd):
+        deny("the approval page is for humans only")
     toks = tokens(cmd)
     mentions_adapty = "adapty" in cmd or "adapty" in "".join(toks)
     for seg in segments(toks):

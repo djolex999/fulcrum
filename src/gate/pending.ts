@@ -26,6 +26,8 @@ export interface ActionView {
   approvedBy?: string;
   executedAt?: string;
   cliExit?: number;
+  /** Agent-supplied rationale, already redacted. */
+  rationale: string;
 }
 
 export interface StopRequest {
@@ -47,7 +49,6 @@ export interface StopRequestResult {
 }
 
 interface Action extends ActionView {
-  rationale: string;
   inFlight: boolean;
 }
 
@@ -68,7 +69,7 @@ export function createGate(deps: {
   const reserved = new Map<string, string>();
 
   const view = (a: Action): ActionView => {
-    const { rationale: _r, inFlight: _f, ...rest } = a;
+    const { inFlight: _f, ...rest } = a;
     return { ...rest };
   };
 
