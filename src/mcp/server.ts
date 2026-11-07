@@ -6,6 +6,7 @@ import { createAdaptyCli } from "../adapty/cli.js";
 import { loadConfig } from "../config.js";
 import { createLedger } from "../gate/ledger.js";
 import { createGate } from "../gate/pending.js";
+import { startApprovalPage } from "../ui/approve.js";
 import { createLogger } from "./log.js";
 import { placeholderJudge, placeholderTimeline, registerTools, type ToolDeps } from "./tools.js";
 
@@ -25,8 +26,9 @@ export async function main(opts: { startApprovalPage?: (gate: Gate, port: number
   // Placeholder judge until the verdict engine lands: it can never return WINNER.
   const gate = createGate({ cli, ledger, judge: placeholderJudge });
   const server = buildServer({ cli, gate, judge: placeholderJudge, timeline: placeholderTimeline, log, scrub });
-  // The human approval page (Task 10) plugs in here; without it nothing can be approved.
-  opts.startApprovalPage?.(gate, config.port);
+  // The human approval page: the only path to approve a write. Injectable for tests.
+  const startPage = opts.startApprovalPage ?? ((g: Gate, p: number) => startApprovalPage(g, p, ledger, log));
+  startPage(gate, config.port);
   await server.connect(new StdioServerTransport());
   log("Fulcrum MCP server ready on stdio");
 }
