@@ -43,6 +43,12 @@ How AI was used to build Fulcrum at the Adapty Hackathon Belgrade (7 to 8 Nov 20
 - **Found:** 8 questions: contracts, data and CLI shape, the week 2 and week 9 cutoffs, calibration, approval security, the Settings "promote" wording, the pre-commit hook, and what is optional.
 - **What we changed:** we answered all 8 in the design doc. Four were decided as marked calls: the live stop is judged on the CSV, c is precomputed by simulation, the Settings goal is revenue per install to date, and the approval page re-checks the verdict when someone approves and executes at most once. Nothing needed a new decision from Djordje before planning.
 
+### Gate review (Task 3, Sat 7 Nov, ~13:40, Fable + security plugin)
+
+- **Who:** a fresh Fable subagent that saw only the task brief, the diff and SPEC.md's gate invariants, asked three questions: can the agent bypass the gate, can a secret leak, is the ledger append-only. An automated security review of the commit ran in parallel.
+- **Found:** no bypass (`stopTest` has one call site, after a named human approval; concurrent approvals execute once), no leak (every stored reason redacted). Three Important issues: concurrent requests for one test could create two pending actions (both reviewers found it; Fable reproduced it with two stops), the action became approvable before its ledger entry was written, and the judge's codes (`BEFORE_HORIZON`, `METRIC_NOT_GOAL`) never reached `request_stop`.
+- **What we changed:** the test slot is reserved before any await, the ledger is written first, and `request_stop` carries the judge's verdict and code (SPEC.md overruled the plan's wording). A Fable re-review confirmed all three fixed; the remaining observations are logged as known limits for the final review.
+
 ## Phases
 
 One entry per build phase, written at the end of `phase-checkpoint` in Djordje's words.
