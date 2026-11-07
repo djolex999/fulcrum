@@ -58,7 +58,7 @@ tests/                   one or more tests per acceptance criterion, named with 
 
 ## Planned shape
 
-Nothing here is built yet. **The demo design is in [docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md)**; SPEC.md holds the contracts and ACs.
+Phases 1–4 are built (see the README status line). **The demo design is in [docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md)**; SPEC.md holds the contracts and ACs.
 
 - **What it is:** the only door between AI agents and Adapty. Fulcrum is an MCP server: the agent reads through Fulcrum and has no direct write path (Adapty MCP write tools and CLI writes are denied for it); every change (stop a test, start a new one) passes policy, statistics and a human approval, then Fulcrum executes it through the Adapty CLI (auth via `ADAPTY_TOKEN`, held only by Fulcrum).
 - **Why AI:** the statistics are plain deterministic code. The AI part is the agent doing growth work (finding the next hypothesis, proposing tests, explaining verdicts); Fulcrum is what makes that safe. This is the weakest judge question, so answer it honestly.
@@ -66,7 +66,7 @@ Nothing here is built yet. **The demo design is in [docs/superpowers/specs/2026-
 - **Pitch line:** "Adapty just gave AI agents the keys. Fulcrum is the only door."
 - **The moment to remember:** the agent tries Adapty's own stop tool and is denied; through Fulcrum it is told "not yet" (peeking) or "no" (metric shopping), and when the evidence allows, a human approves and Fulcrum stops the test live. Then the agent proposes a new test, and it goes through the same door.
 - **The agent:** real Claude Code in a demo folder whose MCP config has **only** the Fulcrum server (Adapty plugin off, no CLI, no token). The "naive" moment is the real agent following a hurried human's instruction.
-- **Demo flow:** see `CLAUDE.local.md` section 8 (private). In short: hook (agents have write access and they peek), direct Adapty stop denied, Settings time travel blocked by the boundary and then for metric shopping, Onboarding live stop after approval, the agent proposes a new test on `ai_limit_reached` (5+ AI edits signal), how we built it.
+- **Demo flow:** `demo/PROMPTS.md` (stage order; details in `CLAUDE.local.md` section 8). Refusals first: direct Adapty stop denied, Settings 16 Aug blocked by the boundary, payer rate refused as metric shopping, Onboarding replay "not yet" (week 2) then "now" (week 9); only then approval and the live stop; then the agent proposes a new test on `ai_limit_reached` (5+ AI edits signal). Rehearsal stops use the "Throwaway A/B: onboarding rehearsal" plans in `test-plans.json`.
 - **Peeking date:** the 2 Sep Settings scene does not hold (p = 0.26 in two independent checks). The only naive-significant `settings` look on its test-plan goal (30-day RPI) is **16 Aug** (p ≈ 0.044, boundary ≈ 3.3). It is fragile (permutation p = 0.052): AC-PEEK pins the implementation's own number, and the pitch says "a weekly-peeking agent would have shipped it here", nothing stronger.
 - **Closed loop (was the fallback):** the agent finds that users with 5+ AI edits on day one pay about twice as often and calls `propose_test` for a new test on `ai_limit_reached`; Fulcrum checks policy and queues it for approval.
 
