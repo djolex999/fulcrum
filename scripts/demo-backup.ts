@@ -1,3 +1,4 @@
+import { connect } from "node:net";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
 import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js";
 
@@ -5,6 +6,18 @@ import { StdioClientTransport } from "@modelcontextprotocol/sdk/client/stdio.js"
 // Never touches the approval page; a human still approves there.
 const TEST_ID = process.env.DEMO_TEST_ID ?? "REPLACE_ME";
 const ARM_ID = process.env.DEMO_ARM_ID ?? "REPLACE_ME";
+
+// The backup starts a second Fulcrum, which binds the approval page. If the agent's Fulcrum already holds the port, refuse before starting anything.
+function portTaken(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = connect({ port, host: "127.0.0.1" });
+    sock.once("connect", () => {
+      sock.destroy();
+      resolve(true);
+    });
+    sock.once("error", () => resolve(false));
+  });
+}
 
 async function show(client: Client, name: string, args: Record<string, unknown>): Promise<void> {
   console.log(`\n> ${name} ${JSON.stringify(args)}`);
@@ -16,6 +29,12 @@ async function show(client: Client, name: string, args: Record<string, unknown>)
 async function main(): Promise<void> {
   if (TEST_ID === "REPLACE_ME" || ARM_ID === "REPLACE_ME") {
     throw new Error("Set DEMO_TEST_ID and DEMO_ARM_ID (the Settings test and its winning arm) before running npm run demo:backup.");
+  }
+  const rawPort = process.env.FULCRUM_PORT;
+  const port = rawPort === undefined ? 8787 : Number(rawPort);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error("FULCRUM_PORT must be an integer between 1 and 65535");
+  if (await portTaken(port)) {
+    throw new Error(`another Fulcrum is running on ${port}; set FULCRUM_PORT=${rawPort === undefined ? 8788 : port + 1} to run the backup script`);
   }
   const transport = new StdioClientTransport({
     command: "npx",

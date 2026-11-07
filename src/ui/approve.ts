@@ -47,8 +47,14 @@ export interface ApprovalSecrets {
   csrfSecret: string;
 }
 
-// The login link is valid for 1 minute and once. If you miss it, restart Fulcrum for a new one.
-const LOGIN_TTL_MS = 60_000;
+// The login link is valid once, for FULCRUM_LOGIN_TTL seconds (integer 10-3600, default 60). If you miss it, restart Fulcrum for a new one.
+const DEFAULT_LOGIN_TTL_S = 60;
+
+/** Login-link lifetime in ms from FULCRUM_LOGIN_TTL (seconds). Missing or invalid gives 60 s. */
+export function loginTtlMs(raw: string | undefined = process.env.FULCRUM_LOGIN_TTL): number {
+  const n = raw !== undefined && /^\d+$/.test(raw.trim()) ? Number(raw.trim()) : NaN;
+  return (Number.isInteger(n) && n >= 10 && n <= 3600 ? n : DEFAULT_LOGIN_TTL_S) * 1000;
+}
 
 const SESSION_COOKIE = "fulcrum_session";
 
@@ -93,14 +99,14 @@ function listPage(gate: Gate, csrf: string, notice?: string, proposals?: Proposa
 export function buildApprovalApp(
   gate: Gate,
   ledger: Ledger | undefined,
-  opts: ApprovalSecrets & { port?: number; now?: () => number; proposals?: Proposals },
+  opts: ApprovalSecrets & { port?: number; now?: () => number; proposals?: Proposals; loginTtlMs?: number },
 ): Hono {
   const port = opts.port ?? 8787;
   const { csrfSecret, proposals } = opts;
   const now = opts.now ?? (() => Date.now());
   // The login code exists only in this process's memory and in the URL that Fulcrum opens in the user's browser. The agent never sees it.
   let loginCode: string | null = opts.loginCode;
-  const loginExpiresAt = now() + LOGIN_TTL_MS;
+  const loginExpiresAt = now() + (opts.loginTtlMs ?? loginTtlMs());
   const sessions = new Set<string>();
   // CSRF token derived from the session id + a server secret. A page on another site can't guess it, so it can't submit the form for you.
   const csrfFor = (sessionId: string): string => createHmac("sha256", csrfSecret).update(sessionId).digest("hex");

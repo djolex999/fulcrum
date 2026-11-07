@@ -388,3 +388,24 @@ describe("startApprovalPage", () => {
     expect(r.logs.join("\n")).toContain("EADDRINUSE");
   });
 });
+
+describe("login TTL", () => {
+  it("reads FULCRUM_LOGIN_TTL in seconds, 10-3600, else 60", async () => {
+    const { loginTtlMs } = await import("../../src/ui/approve.js");
+    expect(loginTtlMs(undefined)).toBe(60_000);
+    expect(loginTtlMs("120")).toBe(120_000);
+    expect(loginTtlMs("10")).toBe(10_000);
+    expect(loginTtlMs("3600")).toBe(3_600_000);
+    for (const bad of ["9", "3601", "abc", "", "1.5", "-5", "0"]) expect(loginTtlMs(bad)).toBe(60_000);
+  });
+
+  it("the login link expires after the configured TTL", async () => {
+    const ledger = createLedger(join(dir, "ttl.jsonl"));
+    const gate = createGate({ cli: { stopTest: async () => DETAIL }, ledger, judge: winner });
+    let t = 1_000_000;
+    const app = buildApprovalApp(gate, ledger, { port: PORT, loginCode: LOGIN, csrfSecret: CSRF_SECRET, now: () => t, loginTtlMs: 30_000 });
+    t += 31_000;
+    const res = await app.request(`/login?t=${LOGIN}`, { headers: { host: HOST } });
+    expect(res.status).toBe(401);
+  });
+});
