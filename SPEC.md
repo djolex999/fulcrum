@@ -1,6 +1,6 @@
 # Fulcrum spec
 
-> **DRAFT.** Nothing here is built yet. The design and the demo story are in [docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md). Numbers marked ≈ come from analysis and independent re-computation, and get re-verified by the tests.
+> **Status (Sat 7 Nov, evening):** AC-BYPASS, AC-TOKEN, AC-PEEK, AC-SHOP, AC-CALIB and the supporting AC-1 to AC-12 are implemented and pass (`npm test`). AC-LOOP and AC-POLICY are in progress. The design and demo story are in [docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md). Numbers marked ≈ are reproduced by the tests.
 
 ## Positioning
 

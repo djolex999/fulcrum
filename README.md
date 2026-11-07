@@ -1,8 +1,8 @@
 # Fulcrum
 
-> **DRAFT.** Written before the Adapty Hackathon Belgrade (7 to 8 Nov 2026) kickoff. Nothing described below is built yet.
+> **Status (Sat 7 Nov, evening):** built and tested: the MCP server, the approval gate and ledger, the human-only approval page, the isolated demo agent, and the verdict engine (declared goal, horizon, sequential boundary, `as_of` replay, metric-shopping refusal). In progress: `propose_test` (the agent proposes a new test through the same gate) and the policy file. Run `npm run demo:story` to see the evidence.
 
-AI agents run paywall experiments that make subscription apps more money, without fooling themselves. Fulcrum sits between the agent and Adapty: every change the agent wants passes a statistical check and a human approval before Fulcrum executes it.
+Fulcrum is the only door between AI agents and an Adapty account. There is no tool, no CLI and no token for the agent: its only path to a write is Fulcrum. Agents can read test data; every change passes the test's declared goal, a sequential stopping boundary and a human approval, and only then does Fulcrum execute it.
 
 ## The problem
 
@@ -21,11 +21,18 @@ The result is shipped "winners" that never actually won.
 - **Agent loop:** to be written during the event.
 - **Stopping boundaries:** to be written during the event.
 
+## Limitations
+
+- **Synthetic data.** All numbers come from the public synthetic Lumen dataset (`export_csv`). The live stop is judged on that offline export; live `adapty_metrics` (about 1,000 of today's users) is not wired in yet.
+- **Isolation is client policy plus token absence.** The demo agent has no Adapty tool, no CLI write and no token; its only path to a write is Fulcrum. On one machine and one OS user this is enforced by Claude Code's sandbox, deny rules and a hook. In production Fulcrum would run as a separate service that holds the token.
+- **Approval page.** Local only (127.0.0.1), one human approver, a one-time login link; no multi-user auth.
+- **Gate state is in memory.** Restarting Fulcrum drops pending requests (the ledger on disk is kept).
+
 ## Built with
 
 - Adapty CLI (Fulcrum calls Adapty through it)
 - Model Context Protocol (`@modelcontextprotocol/sdk`): Fulcrum is an MCP server for the agent
-- Claude API
+- Claude Code: the agent in the demo (connected to Fulcrum over MCP) and the build tool
 - TypeScript on Node 22, Hono, Vitest
 
 ## Disclosure
