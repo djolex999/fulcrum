@@ -15,6 +15,39 @@ How AI was used to build Fulcrum at the Adapty Hackathon Belgrade (7 to 8 Nov 20
 - **Guard hook.** A `PreToolUse` hook ([.claude/hooks/guard.sh](.claude/hooks/guard.sh)) backs up the deny rules, which only match exact command prefixes. It parses every Bash command and denies Adapty write commands in any form (`npx adapty@…`, full paths, `bash -c`, `$(…)`, chains) plus `adapty apps get`, and denies `.env` access through Bash, Read, Grep, Glob, Edit and Write. If it cannot check a call, it denies it. Tested by [.claude/hooks/guard.test.sh](.claude/hooks/guard.test.sh). This is a client-side policy, not a security boundary: the real boundary is that only the Fulcrum process holds `ADAPTY_TOKEN` (see SPEC.md). Hardened over three rounds of automated security review (quoted values, `npx`/path/`bash -c` forms, variable and ANSI-C command words, `.env` globs and brace tricks), then deliberately stopped: a text-matching guard cannot fully parse shell. Known limits: a script file that calls `adapty`, and deliberate obfuscation.
 - **Activity hook.** A `PostToolUse` hook ([.claude/hooks/ai-log.sh](.claude/hooks/ai-log.sh)) appends one JSON line per Edit, Write, MultiEdit or Bash call to a local, gitignored `.ai-log/events.jsonl`: timestamp, tool, file path or the first 120 characters of the command, and a success flag. Secrets are redacted before writing (known token prefixes, `*KEY*`/`*TOKEN*`/`*SECRET*`/`*PASSWORD*` values, auth headers and Bearer tokens, credentials in URLs, long random strings), and file contents and prompts are never logged. The raw log stays on the developer's machine (it is gitignored); this file is the public summary. Tested by [.claude/hooks/ai-log.test.sh](.claude/hooks/ai-log.test.sh).
 
+## Tools and IDE, and why
+
+- **Claude Code (desktop app)** as the only coding tool. Each piece of work runs in its own git worktree, so a review or an experiment never touches the main checkout.
+- **Model split.** Reviewers run on a different model than the session that wrote the code (Fable for gate, server and data reviews; Sonnet for the builder check and some security re-reviews), so a reviewer does not share the builder's blind spots.
+- **Superpowers workflow skills** set the order of work: brainstorm the design ([demo design](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md)), write SPEC.md with acceptance criteria, write a task plan ([plan](docs/superpowers/plans/2026-11-07-fulcrum.md)), then build task by task with tests first.
+- **Automated security review** (a Claude Code plugin) runs on security-relevant commits, next to the reviewer subagents.
+- **Pre-commit hook** ([.githooks/pre-commit](.githooks/pre-commit)): scans staged files for secrets, then runs `tsc --noEmit` and the full test suite. A commit that fails any of them does not land.
+
+## MCP servers, and why
+
+| Server | Who uses it | Why |
+|---|---|---|
+| **Fulcrum** (ours, stdio, [src/mcp/server.ts](src/mcp/server.ts)) | the demo agent, as its **only** server ([demo/.mcp.json](demo/.mcp.json)) | Reads (tests, verdicts, timelines) plus `request_stop`, which only creates a pending action. There is no approve tool: a human approves in the browser. |
+| **Adapty MCP** (`https://mcp.adapty.io/mcp`) | the coding agent, read-only | Fast reads of the seeded app's tests, placements and metrics while building. All 27 write tools are denied, plus `apps_get` (it returns the app secret). |
+
+Fulcrum calls Adapty through the Adapty CLI, not through Adapty's MCP: the MCP is built for an AI client with browser OAuth, and Fulcrum needs to be a plain server process that is the only holder of `ADAPTY_TOKEN`.
+
+## How the project is designed around agents
+
+- **Spec before code, tests before implementation.** Every rule (declared goal only, horizon from the goal, calibrated boundary, no write without approval, token never in output) is an acceptance criterion in SPEC.md with a test named after it. The agent builds against the tests, not against a vague prompt.
+- **Numbers are not trusted until two independent paths agree.** The pitch numbers came from a pre-event analysis; a fresh subagent with no access to our code re-computed them from the raw CSV, and one of our planned demo scenes did not survive (see Cross-check 2).
+- **The agent cannot weaken its own guardrails.** Deny rules, the guard hook and the sandboxed demo agent make the policy files read-only for the agent; the pre-commit hook refuses a commit with failing types or tests.
+- **Small phases with a stop point.** Each phase ends when its AC tests pass, then `phase-checkpoint` makes Djordje explain the code back before the next phase starts.
+- **The product applies the same idea to its own users.** Fulcrum is a harness for a growth agent: it reads freely, and every write passes a deterministic check and a human.
+
+## Prompts that worked
+
+Shortened paraphrases of the briefs; the point is what each one withholds or narrows.
+
+1. **Isolated cross-check.** "You have no project context. Read only the CSVs and flow files at <path>. Do not read <repo>, any spec or any notes. For each A/B test, define revenue per install at the test's goal horizon, compute it per arm at every weekly look, and report when (if ever) |z| crosses 2.1 × sqrt(15/k). State your definitions." Giving it no numbers is what made its disagreement on Settings believable.
+2. **Three-question reviewer.** "You see only this diff and SPEC.md. Answer three things, each with file:line evidence or a reproduction: can the agent reach an Adapty write without a named human approval, can the token reach any output or log, is the boundary computed as the spec says." Narrow questions found real bugs (double pending actions, self-approval with `curl`) instead of style notes.
+3. **Builder check.** "Read only this design document. Before you could write an implementation plan, what would you still need to know? List questions, not suggestions." It turned an implicit design into 8 explicit decisions.
+
 ## Independent reviews
 
 ### Cross-check 1: pitch numbers from raw data (Sat 7 Nov, ~12:05)
