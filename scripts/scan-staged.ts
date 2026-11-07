@@ -8,7 +8,7 @@ function git(args: string[]): string {
   return execFileSync("git", args, { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 });
 }
 
-const files = git(["diff", "--cached", "--name-only", "--diff-filter=ACM", "-z"])
+const files = git(["diff", "--cached", "--name-only", "--diff-filter=ACM", "--no-renames", "-z"])
   .split("\0")
   .filter((f) => f.length > 0 && !SKIP.some((re) => re.test(f)));
 
