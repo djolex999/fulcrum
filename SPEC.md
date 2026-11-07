@@ -2,15 +2,19 @@
 
 > **DRAFT.** Nothing here is built yet. The design and the demo story are in [docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md). Numbers marked ≈ come from analysis and independent re-computation, and get re-verified by the tests.
 
+## Positioning
+
+Fulcrum is the only door between AI agents and an Adapty account. Agents can read everything. Every change goes through Fulcrum: policy, statistics, human approval, then Fulcrum executes. It lets agents safely make apps more money.
+
 ## Goal, user, non-goals
 
 - **Goal:** help subscription apps make more money by stopping A/B test decisions that are wrong: shipping fake winners, and leaving real winners in a test for weeks.
 - **User:** a growth lead who lets AI agents run paywall and onboarding tests in Adapty, and wants them fast but unable to fool themselves.
-- **Non-goals:** a new dashboard or analytics product; Bayesian/P2BB replacement; multi-app or multi-tenant auth; real user data; auto-approval of any kind.
+- **Non-goals:** a dashboard or human-facing experiment judge; test health checks; a new analytics product; Bayesian/P2BB replacement; multi-app or multi-tenant auth; real user data; auto-approval of any kind.
 
 ## Verdict rules
 
-1. **Goal metric only.** Each test's declared goal (metric, horizon, K) comes from the checked-in test plan file `test-plans.json`, shown as `goal_source: "test_plan"`, because Adapty does not store a machine-readable goal metric. Onboarding: 60-day revenue per install. Settings: revenue per install to date. A request on any other metric is refused as metric shopping.
+1. **Goal metric only.** Each test's declared goal (metric, horizon, K) comes from the checked-in test plan file `test-plans.json`, shown as `goal_source: "test_plan"`, because Adapty does not store a machine-readable goal metric. Onboarding: 60-day revenue per install (matches its Adapty goal text, "maximises 60-day revenue per install"). Settings: 30-day revenue per install (its Adapty goal text, "Earlier test - stopped with a winner", names no metric, so the test plan declares it). A request on any other metric is refused with reason "metric shopping".
 2. **RPI** = net revenue (refunds subtracted at refund time) within the horizon, over all installs that have the full horizon (to date: all installs up to the cutoff); z is Welch on per-user values; look k ends at the first install + 7k days.
 3. **Horizon from the goal.** A goal of "60-day revenue per install" means only users installed ≥ 60 days before the look count, so Onboarding's first valid look is week 9. Earlier looks return `BEFORE_HORIZON`.
 4. **K and horizon are parameters** from the test plan. If the plan does not give K, use the fallback (K = 15 weekly looks) and return `K_source: "fallback"` so it is visible.
@@ -29,12 +33,18 @@ The agent gets only these tools. There is no approve tool: approval happens only
 | `judge_test` | `{test_id, as_of?: date, metric?: string}` | `{verdict, goal_metric, look_k, K, K_source, horizon_days, z, boundary, effect, p_naive, arms[], source, reasons[]}` | `UNKNOWN_TEST`, `METRIC_NOT_GOAL`, `BEFORE_HORIZON`, `INVALID_AS_OF`, `AS_OF_REQUIRES_CSV` |
 | `test_timeline` | `{test_id, metric?: string}` | `{goal_metric, K, K_source, looks: [{k, date, z, boundary, crossed, leader, p_naive}], first_crossing?: {k, date, arm}, end: {leader, effect, p_naive}, source}` | `UNKNOWN_TEST`, `METRIC_NOT_GOAL` |
 | `request_stop` | `{test_id, winner_arm_id, metric, rationale, as_of?: date}` | `{action_id, status: "blocked" \| "pending", verdict, reason}` | `UNKNOWN_TEST`, `NOT_LIVE`, `UNKNOWN_ARM`, `DUPLICATE_PENDING` |
+| `propose_test` | `{placement, flows: [flow_a, flow_b], audience: segment_id \| "all", traffic_share, hypothesis}` | `{action_id, status: "blocked" \| "pending", policy_rule?, reason}` | `UNKNOWN_PLACEMENT`, `UNKNOWN_FLOW`, `TEST_ALREADY_RUNNING`, `DUPLICATE_PENDING` |
 | `request_status` | `{action_id}` | `{action_id, status: blocked \| pending \| approved \| rejected \| executed \| failed, approved_by?, executed_at?, cli_result?}` | `UNKNOWN_ACTION` |
 
 - `request_stop` runs `judge_test` itself. It returns `blocked` unless the verdict is `WINNER` on the goal metric for that arm. With `as_of` (replay) it only ever returns the verdict and a ledger entry, never a pending action: a past date can't be executed.
 - For a completed test, `request_stop` returns `NOT_LIVE`, and `judge_test` / `test_timeline` still explain whether the declared winner was supported.
 - Asking again after a block, or rephrasing, re-runs the same check: the result only changes if the data changes.
 - After approval Fulcrum runs `adapty ab-tests stop <id> --app <app> --winner <arm> --yes --json`, then confirms with `adapty ab-tests get --json`.
+- `propose_test` checks policy (allowed placement, max traffic share, no test already running on that placement and audience, daily write limit) and queues a pending action; after approval Fulcrum runs `adapty ab-tests create` then `adapty ab-tests start` (flags verified with `--help` first) and confirms with `ab-tests get`. A blocked proposal cites the policy rule.
+
+## Policy (`fulcrum.policy.yaml`, one per app)
+
+`approvers` (names allowed to approve), `allowed_actions` (`stop_test`, `create_test`), `min_horizon_days` per goal metric, `max_traffic_share` for new tests, `daily_write_limit`. Fulcrum loads and validates it at start; an invalid or missing policy **fails closed** (every write blocked, reason "invalid policy"). Every block cites the rule (for example `policy_rule: "max_traffic_share"`).
 
 ## Approval gate invariants
 
@@ -44,11 +54,25 @@ The agent gets only these tools. There is no approve tool: approval happens only
 
 ## Acceptance criteria
 
+### Priority criteria (named; never cut AC-BYPASS, AC-TOKEN, AC-CALIB)
+
 | ID | Criterion |
 |---|---|
-| AC-1 | Settings (declared winner `settings` in Adapty): `test_timeline` on the goal metric shows **no look where the boundary is crossed in `settings`' favour**, and at the end `main_lifetime` leads (≈ −$1.57 RPI, p ≈ 0.067). `judge_test` reports the declared winner as not supported. |
+| AC-BYPASS | With the project's demo client config, a direct Adapty MCP write tool (e.g. `ab_tests_stop`) or CLI write command (`adapty ab-tests stop …`) from the agent is **denied**; the same action requested through Fulcrum's `request_stop` reaches the gate. The demo script has a step that shows the denial. |
+| AC-TOKEN | `ADAPTY_TOKEN` exists only in the Fulcrum process (not in the agent's MCP config or environment); no Fulcrum tool output, error, log line or ledger entry contains it. (Covers AC-5 and AC-12.) |
+| AC-PEEK | Settings as of **2026-08-16** on its declared goal (30-day RPI): naive p < 0.05 (≈ 0.044) but \|z\| below the boundary at that look (≈ 3.3), so `request_stop` is `blocked` and the response shows the boundary. *Correction of the requested 2026-09-02: two independent checks give p = 0.26 there, so it is not a peeking moment.* |
+| AC-SHOP | A stop justified by a metric that is not the declared goal is refused with reason "metric shopping" (code `METRIC_NOT_GOAL`). Example: Settings with `metric: "payer_rate"`. (Supersedes AC-3.) |
+| AC-LOOP | The agent calls `propose_test` with a placement, two flows, an audience and a hypothesis; Fulcrum checks policy (allowed placement, max traffic share, no test already running there) and queues it; after approval Fulcrum runs `ab-tests create` and `start`. Demo target: users with 5+ AI edits on day one, new test on `ai_limit_reached`. |
+| AC-POLICY | `fulcrum.policy.yaml` per app (approvers, allowed actions, min horizon per goal, max traffic share, daily write limit) is enforced; every block cites the rule; an invalid policy fails closed. |
+| AC-CALIB | The simulation shows ≈ 5% false wins with the boundary and ≥ 20% with naive weekly peeking. (Same as AC-6.) |
+
+### Supporting criteria (existing; test names in the code use these ids)
+
+| ID | Criterion |
+|---|---|
+| AC-1 | Settings (declared winner `settings` in Adapty): `test_timeline` on the goal metric shows **no look where the boundary is crossed in `settings`' favour**, and at the end `main_lifetime` leads on its goal metric and on revenue to date (≈ −$1.57 RPI, p ≈ 0.067). `judge_test` reports the declared winner as not supported. |
 | AC-2 | Onboarding on 60-day revenue per install: `request_stop` with `as_of` at week 2 returns `blocked` with `BEFORE_HORIZON` ("not yet"); the first valid look is week 9, where the boundary is crossed (z ≈ 4.5 vs ≈ 2.71) and the verdict is `WINNER` for weekly first ("now"). |
-| AC-3 | A request on a metric that is not the declared goal is refused with `METRIC_NOT_GOAL`. Examples: Settings with `metric: "rpi_30d"` (the one look, 16 Aug, where `settings` looked naively significant, p ≈ 0.044) and with `metric: "payer_rate"`. |
+| AC-3 | Superseded by AC-SHOP. |
 | AC-4 | A stop with no approval never runs the CLI; an approved action runs it exactly once; a rejected one never. |
 | AC-5 | The token value never appears in any tool output, error, ledger entry or log line. |
 | AC-6 | 2,000+ simulated A/A tests through the boundary give 5% ± 1.5% false wins; naive weekly peeking at p < 0.05 gives ≥ 20% (≈ 22.5% with 15 looks). |
@@ -67,7 +91,13 @@ All tests use Vitest (TypeScript). Stats tests read the offline CSV in place via
 |---|---|
 | AC-1 | `AC-1 Settings boundary never crossed for the declared winner`, `AC-1 Settings declared winner is not supported at the end` |
 | AC-2 | `AC-2 Onboarding stop at week 2 is blocked as BEFORE_HORIZON`, `AC-2 Onboarding is WINNER at week 9 on 60-day revenue` |
-| AC-3 | `AC-3 request_stop on non-goal metric returns METRIC_NOT_GOAL` |
+| AC-SHOP | `AC-SHOP payer-rate stop for Settings is refused as metric shopping` |
+| AC-PEEK | `AC-PEEK Settings as_of 2026-08-16 is blocked by the boundary despite naive p < 0.05` |
+| AC-BYPASS | `AC-BYPASS demo config denies Adapty write tools and CLI writes`, `AC-BYPASS the same stop through Fulcrum reaches the gate` |
+| AC-TOKEN | `AC-TOKEN token absent from outputs, errors, ledger and logs` (with AC-5, AC-12) |
+| AC-LOOP | `AC-LOOP propose_test queues a pending create after policy check`, `AC-LOOP approved proposal runs create then start` |
+| AC-POLICY | `AC-POLICY every block cites its rule`, `AC-POLICY invalid policy fails closed` |
+| AC-CALIB | the AC-6 tests |
 | AC-4 | `AC-4 pending action never calls the CLI`, `AC-4 approved action calls the CLI once`, `AC-4 rejected action never calls the CLI` |
 | AC-5 | `AC-5 token absent from outputs, errors, ledger and logs` |
 | AC-6 | `AC-6 boundary false-win rate is about 5%`, `AC-6 naive peeking false-win rate is at least 20%` |

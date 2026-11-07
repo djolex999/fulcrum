@@ -2,6 +2,12 @@
 
 Team Fulcrum (Djordje, Milica Petković) at the Adapty Hackathon Belgrade, 7 to 8 Nov 2026.
 
+> **Positioning:** Fulcrum is the only door between AI agents and an Adapty account. Agents can read everything. Every change goes through Fulcrum: policy, statistics, human approval, then Fulcrum executes. It lets agents safely make apps more money.
+>
+> **Pitch:** "Adapty just gave AI agents the keys. Fulcrum is the only door."
+>
+> **Not our lane:** another team builds a human-facing experiment judge (dashboard, health checks, approval before stop, an agent skill). We do **not** build dashboards or test health checks. Our edge is enforced agent isolation, peeking and metric-shopping protection, a closed loop to new tests, and policy as code.
+
 ## Event rules (hard)
 
 - No application code before kickoff (Sat 7 Nov, 10:10). Before that: docs, config and personal tooling only.
@@ -54,18 +60,15 @@ tests/                   one or more tests per acceptance criterion, named with 
 
 Nothing here is built yet. **The demo design is in [docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md)**; SPEC.md holds the contracts and ACs.
 
-- **What it is:** AI agents run paywall experiments that make subscription apps more money, without fooling themselves. Fulcrum is an MCP server between the agent and Adapty: the agent reads test data through Fulcrum's fixed read calls and has no direct write path; every write passes a statistical check and a human approval before Fulcrum executes it through the Adapty CLI (auth via `ADAPTY_TOKEN`).
+- **What it is:** the only door between AI agents and Adapty. Fulcrum is an MCP server: the agent reads through Fulcrum and has no direct write path (Adapty MCP write tools and CLI writes are denied for it); every change (stop a test, start a new one) passes policy, statistics and a human approval, then Fulcrum executes it through the Adapty CLI (auth via `ADAPTY_TOKEN`, held only by Fulcrum).
 - **Why AI:** the statistics are plain deterministic code. The AI part is the agent doing growth work (finding the next hypothesis, proposing tests, explaining verdicts); Fulcrum is what makes that safe. This is the weakest judge question, so answer it honestly.
 - **Money:** the stopping boundary works both ways. It blocks fake winners (Settings: the declared winner `settings` never crossed the boundary and ends behind, p = 0.067, z = 1.83) and lets real winners ship weeks earlier (Onboarding, week 9). Adapty takes a share of customer revenue, so wrong test decisions cost Adapty too.
-- **Pitch line:** "A seatbelt for AI agents on your monetization stack."
-- **The moment to remember:** Fulcrum says "not yet" to a hurried agent, and later says "now" on the same test, and the test stops live in Adapty. Fulcrum knows *when*.
+- **Pitch line:** "Adapty just gave AI agents the keys. Fulcrum is the only door."
+- **The moment to remember:** the agent tries Adapty's own stop tool and is denied; through Fulcrum it is told "not yet" (peeking) or "no" (metric shopping), and when the evidence allows, a human approves and Fulcrum stops the test live. Then the agent proposes a new test, and it goes through the same door.
 - **The agent:** real Claude Code in a demo folder whose MCP config has **only** the Fulcrum server (Adapty plugin off, no CLI, no token). The "naive" moment is the real agent following a hurried human's instruction.
-- **Demo flow (three parts):**
-  1. **Onboarding, "not yet" then "now":** replay at week 2, `request_stop` is blocked (`BEFORE_HORIZON`, the goal is 60-day revenue). Jump to week 9: `WINNER`. Then live: the agent requests the stop, Milica approves, Fulcrum runs the CLI stop.
-  2. **Settings, the mistake already in the dashboard:** Adapty shows `settings` as the winner; `test_timeline` shows the boundary was never crossed for it, and at the end `main_lifetime` leads on every metric.
-  3. **Peeking simulation:** ≈ 22% false wins with weekly peeking, ≈ 5% with the boundary. "Settings is one of the 22% that really happened."
-- **Do not hang the demo on one date.** Independent checks found the old 2 Sep centerpiece does not hold (p = 0.26), and the only naive-significant `settings` lead (16 Aug, 30-day RPI, p ≈ 0.044) is fragile. Mention 16 Aug only as metric shopping, with that wording.
-- **Fallback if the kickoff brief changes direction:** Edit-5 Router. Users with 5+ AI edits on day one get an attribute and a segment, with a test on `ai_limit_reached`.
+- **Demo flow:** see `CLAUDE.local.md` section 8 (private). In short: hook (agents have write access and they peek), direct Adapty stop denied, Settings time travel blocked by the boundary and then for metric shopping, Onboarding live stop after approval, the agent proposes a new test on `ai_limit_reached` (5+ AI edits signal), how we built it.
+- **Peeking date:** the 2 Sep Settings scene does not hold (p = 0.26 in two independent checks). The only naive-significant `settings` look on its test-plan goal (30-day RPI) is **16 Aug** (p ≈ 0.044, boundary ≈ 3.3). It is fragile (permutation p = 0.052): AC-PEEK pins the implementation's own number, and the pitch says "a weekly-peeking agent would have shipped it here", nothing stronger.
+- **Closed loop (was the fallback):** the agent finds that users with 5+ AI edits on day one pay about twice as often and calls `propose_test` for a new test on `ai_limit_reached`; Fulcrum checks policy and queues it for approval.
 
 ### Architecture (decided in review)
 
@@ -110,23 +113,25 @@ Record every write attempt, blocked or approved, with the reason, timestamp and 
 
 ### Exit criterion
 
-If the kickoff brief excludes agents or asks for a consumer feature, switch to the Edit-5 Router fallback by **11:30**.
+Passed (the brief fits agents). The Edit-5 signal is now part of the closed loop (AC-LOOP), not a fallback.
 
 ### Cut order if behind
 
-- The approval UI can be one plain HTML page.
-- Skip polish before skipping time travel.
-- Only phase 4 is optional; the backup video, README and rehearsal are mandatory.
+- The approval UI is one plain HTML page. No dashboards, no test health checks.
+- Cut from the end of the build order. **Never cut AC-BYPASS, AC-TOKEN or AC-CALIB.**
+- The backup video, README and rehearsal are mandatory.
 
 ## Build phases (cut from the end)
 
 Each phase ends at a stop point. Stop and confirm before starting the next.
 
-1. CLI wrapper, approval gate, stop on a throwaway test (never Onboarding/Main). Target ~13:30.
-2. Stats, boundary, verdicts, `as_of` replay, declared-goal rule. Target ~16:00.
-3. Fulcrum MCP tools wired to the agent, approval page, audit ledger, end-to-end demo flow. Target 18:00.
-4. Optional: the agent finds the next hypothesis (Edit-5 signal) and proposes a new test through Fulcrum.
-5. Polish, README, video, rehearsal.
+1. MCP server, token isolation, approval gate, throwaway-test stop, bypass denial (AC-BYPASS, AC-TOKEN). The CLI wrapper, gate and ledger are already built (plan tasks 1–4).
+2. Verdict: declared goal, horizon, boundary, `as_of` replay, metric shopping (AC-PEEK, AC-SHOP, AC-CALIB).
+3. Closed loop: `propose_test` through the gate (AC-LOOP).
+4. Policy file `fulcrum.policy.yaml` (AC-POLICY), if time allows.
+5. Demo script, README, video, rehearsal.
+
+Cut from the end. **Never cut AC-BYPASS, AC-TOKEN or AC-CALIB.**
 
 If a test shows a different number than the spec or `CLAUDE.local.md`, fix the spec and the context file, not the code.
 
