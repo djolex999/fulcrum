@@ -1,6 +1,6 @@
 # Fulcrum
 
-> **Status (Sat 7 Nov, evening):** built and tested (194 tests, `npm test`): the MCP server and the only door (no tool, no CLI, no token for the agent), the approval gate and ledger, the human-only approval page, the verdict engine (declared goal, horizon, sequential boundary, `as_of` replay, metric-shopping refusal), and the closed loop: `find_signals` and `propose_test`, which after human approval creates a new test as a draft (starting it stays a human action in Adapty), under `fulcrum.policy.json`. `npm run demo:story` prints the evidence; `npm run test:attacks` runs the bypass and abuse tests.
+> **Status (Sun 8 Nov, code freeze):** built and tested (194 tests, `npm test`): the MCP server and the only door (no tool, no CLI, no token for the agent), the approval gate and ledger, the human-only approval page, the verdict engine (declared goal, horizon, sequential boundary, `as_of` replay, metric-shopping refusal), and the closed loop: `find_signals` and `propose_test`, which after human approval creates a new test as a draft (starting it stays a human action in Adapty), under `fulcrum.policy.json`. `npm run demo:story` prints the evidence; `npm run test:attacks` runs the bypass and abuse tests.
 
 **Agents peek, and peeking costs money both ways.** On the hackathon's synthetic Lumen app, a weekly-peeking agent would have shipped the wrong paywall on 16 Aug (naive p 0.045, just under 0.05, while z was 2.00 against a stopping boundary of 3.32; by the end the other arm leads), and left a real winner worth about $19k running weeks too long (Onboarding clears the boundary at week 9). Fulcrum fixes both: it blocks fake winners and releases real ones at the first valid look. The peeking risk is calibrated by simulation: about 22% false wins with naive weekly looks vs about 5% with the boundary. All numbers are `export_csv` (synthetic data), reproduced by `npm run demo:story`.
 
@@ -25,6 +25,8 @@ Growth teams running paywall and onboarding A/B tests routinely:
 - peek at results repeatedly, which inflates the rate of false wins (calibrated by simulation: about 22% false wins with naive weekly looks vs about 5% with the boundary).
 
 The result is shipped "winners" that never actually won.
+
+**Who it is for:** the growth or product lead of a subscription app who lets an AI agent run paywall tests, and today stops them by hand or trusts the agent's confirmation prompt.
 
 ## Why this matters for Adapty
 
@@ -98,6 +100,12 @@ Prints the whole story offline from the synthetic data, with no Adapty access an
 - **Synthetic:** the data. Verdicts are computed on the hackathon's synthetic Lumen export (50,000 users); no real user data. The money figure (about $19k) is on that synthetic data.
 - **Not built:** live verdicts on `adapty_metrics`, multi-user approval, and Fulcrum as a separate hosted service.
 
+## What's next
+
+- Live verdicts on `adapty_metrics` next to the CSV export.
+- Fulcrum as a hosted service under its own OS user, with approvals in Slack.
+- Per-test K and horizon from each test plan, and boundaries for Adapty's P2BB.
+
 ## Built with
 
 - Adapty CLI (Fulcrum calls Adapty through it)
@@ -111,7 +119,7 @@ Prints the whole story offline from the synthetic data, with no Adapty access an
 - **Made before kickoff:** a break-time display screen, a draft slide deck, a draft spec (SPEC.md), and the AI log tooling (AI_LOG.md, the `.claude/hooks/ai-log.sh` hook and its test), and a guard hook for the coding agent (`.claude/hooks/guard.sh` and its test).
 - **Pre-existing personal tooling**, not part of the project core: Claude Code skills (`phase-checkpoint`, `demo-preflight`), hooks, and Vir (Djordje's own session-distillation CLI).
 - **AI tools:** Claude Code, including fresh reviewer subagents that see only the diff and the spec. The landing page was designed with Claude Design during the event and lives in a separate repo.
-- **Boilerplate / third-party starters:** none yet. Anything used will be listed here.
+- **Boilerplate / third-party starters:** none.
 
 ## Data
 

@@ -72,12 +72,3 @@ Every reviewer was a fresh Claude subagent that saw only what is listed (never t
 | ~17:00–18:10 | Fable + Sonnet + security plugin | closed loop, attacks, demo safety | live-test rule matched titles; backup port not forwarded | match by placement id (fails closed); port-only env |
 
 **Known limits, said openly:** on one machine and one OS user, a determined local process could read the one-time login code in its 60 s window, and the agent runs as the same OS user as Fulcrum. In production Fulcrum would run as a separate service under its own user, with approvals on a separate channel.
-
-## Phases
-
-### Phases 1–2: the only door, and real verdicts (Sat 10:10–16:40)
-
-- **Goal:** the only door (AC-BYPASS, AC-TOKEN) and verdicts on the declared goal with a calibrated boundary (AC-PEEK, AC-SHOP, AC-CALIB).
-- **What AI produced:** the MCP server, the token kept inside Fulcrum, the gate, ledger and human-only approval page, the sandboxed demo agent; the CSV loader, revenue per install, the boundary and its simulation, the verdict engine. In my words: "the agent has no token, it only has requests"; "no user has done 60 days, until that is accomplished it's always not yet"; "Fulcrum adds it in code, Adapty's MCP is just a prompt."
-- **What I changed or decided:** the Settings scene moved from 2 Sep to 16 Aug after the independent check; the positioning narrowed to "the only door"; the activity log stays private.
-- **Verification:** 140 tests then; every task independently reviewed (table above); pitch numbers re-derived independently.
