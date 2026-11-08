@@ -44,6 +44,18 @@ Shortened paraphrases; the point is what each brief withholds or narrows.
 2. **Three-question reviewer.** "You see only this diff and SPEC.md. With file:line evidence or a reproduction: can the agent reach an Adapty write without a named human approval, can the token reach any output or log, is the boundary computed as the spec says." Narrow questions found real bugs (double pending actions, self-approval with `curl`) instead of style notes.
 3. **Builder check.** "Read only this design document. What would you still need to know before writing a plan? Questions, not suggestions." It turned an implicit design into 8 explicit decisions.
 
+## What AI got wrong, and how we caught it
+
+- **A demo scene that wasn't true.** The plan's centerpiece was "Settings looked like a winner on 2 Sep". An independent subagent that saw only the raw CSV re-computed it: p 0.26, not significant. We dropped the scene and rebuilt the demo around 16 Aug, the only naive-significant look, and say it is fragile.
+- **A self-approval hole.** The first approval page let the agent approve its own request with `curl`. A reviewer that saw only the diff found it; we added a single-use login, a session cookie, CSRF and Origin/Host checks, plus a test.
+- **A real agent took a different path than the tests assumed.** In the live run the agent read "completed" and gave up instead of filing a replay; the tool description was the cause, not the agent. Fixed the description and the `NOT_LIVE` order, with a test.
+
+## What we'd never delegate to AI
+
+- **The approval.** A human clicks Approve; there is no approve tool, by design.
+- **The pitch numbers.** Every number is re-computed in code and by an independent check; the model's first estimates ($21k, 2 Sep) were wrong.
+- **Secrets.** Keys stay in `.env` and are never read by the coding agent (deny rules, a guard hook, a pre-commit scan).
+
 ## Independent reviews
 
 Every reviewer was a fresh Claude subagent that saw only what is listed (never the conversation, the secrets file or Adapty access).

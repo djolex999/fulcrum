@@ -86,6 +86,12 @@ Prints the whole story offline from the synthetic data, with no Adapty access an
 - **Pending requests expire after 30 minutes.** A stop is judged again when the human approves, and runs only if the verdict still holds.
 - **Drafts only.** `propose_test` creates a new test as a draft after approval; starting it is a human action in Adapty.
 
+## Real vs mocked
+
+- **Real:** the Fulcrum MCP server, the approval gate and ledger, the approval page, the verdict engine and boundary, and the Adapty writes. A real Claude Code agent was blocked, replayed and approved through Fulcrum, and Fulcrum stopped real (throwaway) tests in a real Adapty account through the Adapty CLI.
+- **Synthetic:** the data. Verdicts are computed on the hackathon's synthetic Lumen export (50,000 users); no real user data. The money figure (about $19k) is on that synthetic data.
+- **Not built:** live verdicts on `adapty_metrics`, multi-user approval, and Fulcrum as a separate hosted service.
+
 ## Built with
 
 - Adapty CLI (Fulcrum calls Adapty through it)
@@ -109,8 +115,8 @@ Demo and synthetic data only, from the Lumen demo app provided for the hackathon
 
 **Fulcrum**
 
-- Djordje Marković
-- Milica Petković
+- **Djordje Marković:** built everything (spec, code, tests, harness), working with Claude Code.
+- **Milica Petković:** verified the numbers, wrote the pitch and Q&A, presents the demo and plays the human approver.
 
 ## License
 
