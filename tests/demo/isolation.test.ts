@@ -124,6 +124,8 @@ describe("demo agent isolation", () => {
     const demo = JSON.parse(read("demo/.claude/settings.json")) as { claudeMdExcludes?: string[]; autoMemoryEnabled?: boolean };
     for (const g of ["**/CLAUDE.md", "**/CLAUDE.local.md", "**/.claude/CLAUDE.md"]) expect(demo.claudeMdExcludes).toContain(g);
     expect(demo.autoMemoryEnabled).toBe(false);
+    // claude.ai account connectors (Gmail, Calendar, ...) must not show up next to Fulcrum.
+    expect((demo as { disableClaudeAiConnectors?: boolean }).disableClaudeAiConnectors).toBe(true);
   });
 
   it("AC-BYPASS the same stop through Fulcrum reaches the gate", async () => {

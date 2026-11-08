@@ -187,7 +187,7 @@ export function registerTools(server: McpServer, deps: ToolDeps): void {
   // winner becomes "pending" for a human; everything else is "blocked" with the reason.
   tool(
     "request_stop",
-    "Ask to stop a live test with a declared winner. Fulcrum judges it first; a human must approve in the Fulcrum UI. There is no approve tool. blocked means the reason gives the next step. pending means a human must approve at the approval page; poll request_status.",
+    "Ask to stop a live test with a declared winner. With as_of (YYYY-MM-DD) it replays the request at a past date, on any test including completed ones: Fulcrum judges it and blocks it as replay only, never pending, so use it to ask 'would this stop have passed then?'. Fulcrum judges every request first; a human must approve in the Fulcrum UI. There is no approve tool. blocked means the reason gives the next step. pending means a human must approve at the approval page; poll request_status.",
     {
       test_id: z.string(),
       winner_arm_id: z.string(),
