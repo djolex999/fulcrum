@@ -10,6 +10,12 @@ Safety is what lets an agent be trusted to make that money. Fulcrum is the only 
 
 **Landing page:** [djolex999.github.io/fulcrum-site](https://djolex999.github.io/fulcrum-site/), the one-page overview with the three demo moments ([source](https://github.com/djolex999/fulcrum-site)).
 
+## Why "Fulcrum"
+
+Archimedes said that with a lever and a place to stand he could move the world. AI agents are that lever for a growth team: one prompt, and an agent can stop a test, ship a paywall and move real revenue. But a lever without a fixed point doesn't move anything. It just swings.
+
+An A/B test looks the same: a beam with arm A on one side and arm B on the other, tipping a little every time new users arrive. Peeking is mistaking one of those wobbles for the beam settling. The fulcrum is the one point that doesn't move: the declared goal, the stopping boundary and a human approval. Everything the agent does pivots on it. That is Fulcrum: the fixed point that turns an agent's leverage into money instead of noise.
+
 ## The problem
 
 Growth teams running paywall and onboarding A/B tests routinely:
