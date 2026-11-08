@@ -2,9 +2,9 @@
 
 > **Status (Sat 7 Nov, evening):** built and tested (194 tests, `npm test`): the MCP server and the only door (no tool, no CLI, no token for the agent), the approval gate and ledger, the human-only approval page, the verdict engine (declared goal, horizon, sequential boundary, `as_of` replay, metric-shopping refusal), and the closed loop: `find_signals` and `propose_test`, which after human approval creates a new test as a draft (starting it stays a human action in Adapty), under `fulcrum.policy.json`. `npm run demo:story` prints the evidence; `npm run test:attacks` runs the bypass and abuse tests.
 
-**Agents peek, and peeking costs money both ways.** On the hackathon's synthetic Lumen app, a weekly-peeking agent would have shipped the wrong paywall on 16 Aug (naive p 0.045, just under 0.05, while z was 2.00 against a stopping boundary of 3.32; by the end the other arm leads), and left a real winner worth about $19k running weeks too long (Onboarding clears the boundary at week 9). Fulcrum fixes both: it blocks fake winners and releases real ones at the first valid look. All numbers are `export_csv` (synthetic data), reproduced by `npm run demo:story`.
+**Agents peek, and peeking costs money both ways.** On the hackathon's synthetic Lumen app, a weekly-peeking agent would have shipped the wrong paywall on 16 Aug (naive p 0.045, just under 0.05, while z was 2.00 against a stopping boundary of 3.32; by the end the other arm leads), and left a real winner worth about $19k running weeks too long (Onboarding clears the boundary at week 9). Fulcrum fixes both: it blocks fake winners and releases real ones at the first valid look. The peeking risk is calibrated by simulation: about 22% false wins with naive weekly looks vs about 5% with the boundary. All numbers are `export_csv` (synthetic data), reproduced by `npm run demo:story`.
 
-Safety is what lets an agent be trusted to make that money. Fulcrum is the only door between AI agents and an Adapty account. There is no tool, no CLI and no token for the agent: its only path to a write is Fulcrum. Agents can read test data; every change passes the test's declared goal, a sequential stopping boundary and a human approval, and only then does Fulcrum execute it.
+Safety is what lets an agent be trusted to make that money. Fulcrum is the only door between AI agents and an Adapty account: the agent has no write tool and no token. Fulcrum is the only process that can write to Adapty, and it writes only after policy, statistics and a named human. Agents can read test data; every change passes the test's declared goal, a sequential stopping boundary and a human approval, and only then does Fulcrum execute it.
 
 **How we built it with AI:** spec, then tests, then code, with reviewer subagents and an independent recomputation of every number. See [AI_LOG.md: How we built it](AI_LOG.md#how-we-built-it).
 
@@ -16,7 +16,7 @@ Growth teams running paywall and onboarding A/B tests routinely:
 
 - stop tests too early, before enough data has come in;
 - misread winners, treating noise or a short-lived lift as a real effect;
-- peek at results repeatedly, which inflates the rate of false wins.
+- peek at results repeatedly, which inflates the rate of false wins (calibrated by simulation: about 22% false wins with naive weekly looks vs about 5% with the boundary).
 
 The result is shipped "winners" that never actually won.
 
