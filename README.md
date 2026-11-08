@@ -130,7 +130,7 @@ Demo and synthetic data only, from the Lumen demo app provided for the hackathon
 **Fulcrum**
 
 - **Djordje Marković:** built everything (spec, code, tests, harness), working with Claude Code.
-- **Milica Petković:** verified the numbers, wrote the pitch and Q&A, presents the demo and plays the human approver.
+- **Milica Petković:** verified the numbers, wrote the pitch and Q&A, and plays the human approver in the demo.
 
 ## License
 
