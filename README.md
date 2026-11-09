@@ -101,7 +101,7 @@ An AI agent is a lever for a growth team, but a lever without a fixed point just
 ## Team
 
 - **Djordje Marković** (engineering): spec, code, tests and the AI harness, built with Claude Code.
-- **Milica Petković** (data): checked the numbers behind the demo replays against the synthetic dataset, wrote the pitch and Q&A, and approved the live stop on stage.
+- **Milica Petković** (data): verified the numbers and handled the data.
 
 ## License
 
