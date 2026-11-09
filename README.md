@@ -100,7 +100,7 @@ An AI agent is a lever for a growth team, but a lever without a fixed point just
 
 ## Team
 
-- **Djordje Marković** (engineering): spec, code, tests and the AI harness, built with Claude Code.
+- **Djordje Marković** (engineering): spec, code, tests and the AI harness.
 - **Milica Petković** (data): verified the numbers and handled the data.
 
 ## License
