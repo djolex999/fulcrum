@@ -4,6 +4,10 @@
 !.env.example
 SECURITY-NOTES.md
 
+# Private notes (talk tracks, team prep, local context)
+docs/private/
+CLAUDE.local.md
+
 # Dependencies / build
 node_modules/
 .next/

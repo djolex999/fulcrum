@@ -46,7 +46,7 @@ Shortened paraphrases; the point is what each brief withholds or narrows.
 
 ## What AI got wrong, and how we caught it
 
-- **A demo scene that wasn't true.** The plan's centerpiece was "Settings looked like a winner on 2 Sep". An independent subagent that saw only the raw CSV re-computed it: p 0.26, not significant. We dropped the scene and rebuilt the demo around 16 Aug, the only naive-significant look, and say it is fragile.
+- **A demo scene that wasn't true.** The plan's centerpiece was "Settings looked like a winner on 2 Sep". An independent subagent that saw only the raw CSV re-computed it: p 0.26, not significant. We dropped the scene and rebuilt the demo around 16 Aug, the only naive-significant look, and say it is fragile. These are two different scenes on the same test: 2 Sep (p 0.26) was cut; 16 Aug (naive p 0.045, z 2.00 against a boundary of 3.32) is the one the README and `npm run demo:story` show.
 - **A self-approval hole.** The first approval page let the agent approve its own request with `curl`. A reviewer that saw only the diff found it; we added a single-use login, a session cookie, CSRF and Origin/Host checks, plus a test.
 - **A real agent took a different path than the tests assumed.** In the live run the agent read "completed" and gave up instead of filing a replay; the tool description was the cause, not the agent. Fixed the description and the `NOT_LIVE` order, with a test.
 

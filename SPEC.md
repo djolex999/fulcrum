@@ -1,6 +1,6 @@
 # Fulcrum spec
 
-> **Status (Sat 7 Nov, evening):** AC-BYPASS, AC-TOKEN, AC-PEEK, AC-SHOP, AC-CALIB and the supporting AC-1 to AC-12 are implemented and pass (`npm test`). AC-LOOP and AC-POLICY are in progress. The design and demo story are in [docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md). Numbers marked ≈ are reproduced by the tests.
+> **Status:** every acceptance criterion below (AC-BYPASS, AC-TOKEN, AC-PEEK, AC-SHOP, AC-LOOP, AC-POLICY, AC-CALIB and the supporting AC-1 to AC-12) is implemented and passes (`npm test`, 194 tests). Not built: the `adapty_metrics` source, and reading `fallbackK` / `fallbackHorizonDays` from the policy file. The design and demo story are in [docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md](docs/superpowers/specs/2026-11-07-fulcrum-demo-design.md). Numbers marked ≈ are reproduced by the tests.
 
 ## Positioning
 
@@ -31,7 +31,7 @@ The agent gets only these tools. There is no approve tool: approval happens only
 | Tool | Input | Output | Errors |
 |---|---|---|---|
 | `list_tests` | `{}` | `[{test_id, title, state, placement, goal_metric, horizon_days}]` | `ADAPTY_UNAVAILABLE` |
-| `judge_test` | `{test_id, as_of?: date, metric?: string, source?: "csv" \| "adapty_metrics"}` | `{verdict, goal_metric, look_k, K, K_source, horizon_days, z, boundary, effect, p_naive, arms[], source, reasons[]}` | `UNKNOWN_TEST`, `INVALID_AS_OF`, `AS_OF_REQUIRES_CSV`, `ADAPTY_UNAVAILABLE`, `NOT_IMPLEMENTED` (`METRIC_NOT_GOAL` and `BEFORE_HORIZON` are verdict codes, not errors) |
+| `judge_test` | `{test_id, as_of?: date, metric?: string, source?: "csv" \| "adapty_metrics"}` | `{verdict, goal_metric, look_k, K, K_source, horizon_days, z, boundary, effect, p_naive, arms[], source, reasons[]}` | `UNKNOWN_TEST`, `INVALID_AS_OF`, `AS_OF_REQUIRES_CSV`, `ADAPTY_UNAVAILABLE`, `NOT_IMPLEMENTED` (returned today for `source: "adapty_metrics"`; `METRIC_NOT_GOAL` and `BEFORE_HORIZON` are verdict codes, not errors) |
 | `test_timeline` | `{test_id, metric?: string}` | `{goal_metric, K, K_source, looks: [{k, date, z, boundary, crossed, leader, p_naive}], first_crossing?: {k, date, arm}, end: {date, leader, effect, p_naive, arms: [{arm, n}]}, source}` | `UNKNOWN_TEST`, `ADAPTY_UNAVAILABLE`, `NOT_IMPLEMENTED` |
 | `request_stop` | `{test_id, winner_arm_id, metric, rationale, as_of?: date}` | `{action_id, status: "blocked" \| "pending", verdict, reason}` | `UNKNOWN_TEST`, `INVALID_AS_OF`, `NOT_LIVE`, `UNKNOWN_ARM`, `DUPLICATE_PENDING`, `ADAPTY_UNAVAILABLE` (a request still being judged returns `blocked`, "request in progress"; `BEFORE_HORIZON` and `METRIC_NOT_GOAL` are `blocked` results with that code) |
 | `propose_test` | `{placement, flows: [flow_a, flow_b], challenger_weight (percent, default 50), audience: segment_id \| "all", hypothesis}` | `{action_id, status: "blocked" \| "pending", policy_rule?, reason}` | `UNKNOWN_PLACEMENT`, `UNKNOWN_FLOW`, `INVALID_FLOWS`, `DUPLICATE_PENDING` |
@@ -63,10 +63,10 @@ JSON, no extra dependency: `{ "approvers": ["Djordje"], "allowedPlacements": ["a
 |---|---|
 | AC-BYPASS | With the project's demo client config, a direct Adapty MCP write tool (e.g. `ab_tests_stop`) or CLI write command (`adapty ab-tests stop …`) from the agent is **denied**; the same action requested through Fulcrum's `request_stop` reaches the gate. The demo script has a step that shows the denial. |
 | AC-TOKEN | `ADAPTY_TOKEN` exists only in the Fulcrum process (not in the agent's MCP config or environment); no Fulcrum tool output, error, log line or ledger entry contains it. (Covers AC-5 and AC-12.) |
-| AC-PEEK | Settings as of **2026-08-16** on its declared goal (30-day RPI): naive p < 0.05 (≈ 0.045, n 153/175 at 2026-08-16T00:00Z) but \|z\| below the boundary at that look (≈ 3.32), so `request_stop` is `blocked` and the response shows the boundary. *Correction of the requested 2026-09-02: two independent checks give p = 0.26 there, so it is not a peeking moment.* |
+| AC-PEEK | Settings as of **2026-08-16** on its declared goal (30-day RPI): naive p < 0.05 (≈ 0.045, n 153/175 at 2026-08-16T00:00Z) but \|z\| below the boundary at that look (≈ 3.32), so `request_stop` is `blocked` and the response shows the boundary. *An earlier candidate date failed two independent checks (p = 0.26), so it was replaced by this one; see AI_LOG.md.* |
 | AC-SHOP | A stop justified by a metric that is not the declared goal is refused with reason "metric shopping" (code `METRIC_NOT_GOAL`). Example: Settings with `metric: "payer_rate"`. (Supersedes AC-3.) |
 | AC-LOOP | The agent calls `propose_test` with a placement, two flows, an audience and a hypothesis; Fulcrum checks policy (allowed placement, max challenger weight, no live test there) and queues it; after approval by a policy approver Fulcrum runs `ab-tests create` once, producing a **draft**; starting stays a human action in Adapty. Demo target: users with 5+ AI edits on day one (about 31% pay vs about 16% for 1-4 edits), new test on `ai_limit_reached`. |
-| AC-POLICY | `fulcrum.policy.json` (approvers, allowed placements, max challenger weight, fallback K and horizon, daily write limit) is enforced for proposed tests; every block cites the rule; a missing or invalid policy fails closed with `invalid_policy`. |
+| AC-POLICY | `fulcrum.policy.json` (approvers, allowed placements, max challenger weight, daily write limit) is enforced for proposed tests; fallback K and horizon are validated but not yet read by the verdict engine; every block cites the rule; a missing or invalid policy fails closed with `invalid_policy`. |
 | AC-CALIB | The simulation shows ≈ 5% false wins with the boundary and ≥ 20% with naive weekly peeking. (Same as AC-6.) |
 
 ### Supporting criteria (existing; test names in the code use these ids)
