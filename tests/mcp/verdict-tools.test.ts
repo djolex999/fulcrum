@@ -11,7 +11,9 @@ import { createLedger } from "../../src/gate/ledger.js";
 import { createGate } from "../../src/gate/pending.js";
 import { createEngine } from "../../src/mcp/engine.js";
 import { buildServer } from "../../src/mcp/server.js";
+import { boundary } from "../../src/stats/boundary.js";
 import { loadPlans } from "../../src/stats/plans.js";
+import { cFor } from "../../src/stats/verdict.js";
 
 const real = existsSync(DEFAULT_DATA_DIR);
 const DAY = 86_400_000;
@@ -63,7 +65,7 @@ afterEach(() => rmSync(dir, { recursive: true, force: true }));
 let dataset: Dataset | undefined;
 const getData = async (): Promise<Dataset> => (dataset ??= await loadDataset());
 
-async function setup(loadData: () => Promise<Dataset> = getData) {
+async function setup(loadData: () => Promise<Dataset> = getData, fallbackK?: number) {
   const tests = [ONB, SET, ODD, DUP];
   const cli = {
     listTests: async () => tests.map(({ arms: _a, ...s }) => s),
@@ -74,7 +76,7 @@ async function setup(loadData: () => Promise<Dataset> = getData) {
     },
     stopTest: async () => ONB,
   };
-  const { judge, timeline } = createEngine({ cli, plans, loadData });
+  const { judge, timeline } = createEngine({ cli, plans, loadData, ...(fallbackK === undefined ? {} : { fallbackK }) });
   const gate = createGate({ cli, ledger: createLedger(join(dir, "ledger.jsonl")), judge });
   const server = buildServer({ cli, gate, judge, timeline, plans });
   const [a, b] = InMemoryTransport.createLinkedPair();
@@ -125,6 +127,25 @@ describe.skipIf(!real)("real verdicts behind the MCP tools", () => {
     expect(ev.boundary).toBeLessThan(3.45);
     expect(Math.abs(ev.z)).toBeLessThan(ev.boundary);
     expect(ev.p_naive).toBeLessThan(0.05);
+  });
+
+  it("AC-9 the gate judges a plan without K on the policy's fallbackK", async () => {
+    const { call } = await setup(getData, 10);
+    const r = await call("request_stop", {
+      test_id: "t-set",
+      winner_arm_id: "fl-settings",
+      metric: "rpi_30d",
+      rationale: "p is under 0.05",
+      as_of: "2026-08-16",
+    });
+    expect(r.json.status).toBe("blocked");
+    const ev = r.json.evidence as { K: number; look_k: number; boundary: number };
+    expect(ev.K).toBe(10);
+    expect(ev.boundary).toBeCloseTo(boundary(cFor(10), 10, ev.look_k), 10);
+    const j = await call("judge_test", { test_id: "t-set", as_of: "2026-08-16" });
+    expect(j.json).toMatchObject({ K: 10, K_source: "fallback" });
+    const t = await call("test_timeline", { test_id: "t-set" });
+    expect(t.json.K).toBe(10);
   });
 
   it("AC-SHOP request_stop on Settings with payer_rate says metric shopping", async () => {

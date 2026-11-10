@@ -160,6 +160,7 @@ describe.skipIf(!real)("verdicts on real data", () => {
     const v = judgeTest(settings, d, {});
     expect(v.KSource).toBe("fallback");
     expect(v.K).toBe(15);
+    expect(v.reasons.join(" ")).toContain("the built-in fallback K = 15");
     expect(judgeTest(onb, d, {}).KSource).toBe("test_plan");
     expect(testTimeline(settings, d, {}).KSource).toBe("fallback");
   });
@@ -169,7 +170,7 @@ describe.skipIf(!real)("verdicts on real data", () => {
     const v = judgeTest(settings, d, { fallbackK: 10 });
     expect(v.KSource).toBe("fallback");
     expect(v.K).toBe(10);
-    expect(v.reasons.join(" ")).toContain("fallback K = 10");
+    expect(v.reasons.join(" ")).toContain("the policy's fallbackK = 10");
     expect(testTimeline(settings, d, { fallbackK: 10 }).K).toBe(10);
     // A K in the plan wins over the policy's fallback.
     expect(judgeTest(onb, d, { fallbackK: 10 }).K).toBe(onb.K);

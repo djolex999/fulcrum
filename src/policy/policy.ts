@@ -13,7 +13,7 @@ export interface Policy {
   allowedPlacements: readonly string[];
   /** The challenger arm may get at most this share of traffic (percent, 1-99). */
   maxChallengerWeight: number;
-  /** K (planned weekly looks) for a test that has no plan. Recorded here; not yet wired into the verdict engine. */
+  /** K (planned weekly looks) for a test whose plan gives none (1 to 52). The verdict engine uses it; see fallbackKOf. */
   fallbackK: number;
   /** Horizon for a test that has no plan, null = revenue to date. Not yet wired into the verdict engine. */
   fallbackHorizonDays: number | null;
@@ -31,6 +31,11 @@ const isNames = (v: unknown): v is string[] =>
   Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === "string" && x.trim() !== "");
 const isInt = (v: unknown, min: number, max = Number.MAX_SAFE_INTEGER): v is number =>
   typeof v === "number" && Number.isInteger(v) && v >= min && v <= max;
+
+/** The verdict engine's fallback K from a policy state. An invalid policy gives nothing, so the engine uses its built-in K = 15. */
+export function fallbackKOf(state: PolicyState): { fallbackK?: number } {
+  return state.ok ? { fallbackK: state.policy.fallbackK } : {};
+}
 
 /** Strict: unknown keys, wrong types or out-of-range numbers are all errors. Missing file or bad JSON too. */
 export function loadPolicy(path: string = DEFAULT_POLICY_PATH): PolicyState {

@@ -318,7 +318,10 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
     for (const us of pd.users) for (const u of us) if (u.installAt.getTime() > lastEnd) after++;
     reasons.push(`The data runs past the last planned look: ${after} installs fall after look ${K} (ends ${isoDate(cutoff)}) and are not in this verdict.`);
   }
-  if (KSource === "fallback") reasons.push(`The test plan gives no K; using the fallback K = ${K}.`);
+  if (KSource === "fallback") {
+    const from = opts.fallbackK === undefined ? "the built-in fallback K" : "the policy's fallbackK";
+    reasons.push(`The test plan gives no K; using ${from} = ${K}.`);
+  }
 
   return {
     ...base,
