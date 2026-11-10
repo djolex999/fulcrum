@@ -1,12 +1,14 @@
 # Fulcrum
 
+[![CI](https://github.com/djolex999/fulcrum/actions/workflows/ci.yml/badge.svg)](https://github.com/djolex999/fulcrum/actions/workflows/ci.yml)
+
 **2nd place, Adapty First Commit hackathon, Belgrade 2026.**
 
 Fulcrum is the only door between an AI agent and an Adapty account: the agent can read and propose, but every change passes policy, statistics and a human approval before Fulcrum executes it.
 
 - **Demo video (2 min):** [youtu.be/kvZbSLL6XP4](https://youtu.be/kvZbSLL6XP4)
 - **Landing page:** [djolex999.github.io/fulcrum-site](https://djolex999.github.io/fulcrum-site/) ([source](https://github.com/djolex999/fulcrum-site))
-- **Built and tested:** 196 tests (`npm test`), plus a bypass and abuse suite (`npm run test:attacks`).
+- **Built and tested:** 196 tests (`npm test`, run in CI on the pinned dataset), plus a bypass and abuse suite (`npm run test:attacks`).
 
 ## What it does
 
@@ -40,7 +42,12 @@ An agent that checks a test every hour is the perfect machine for the classic A/
 - **Metric shopping is refused.** A test is judged only on its declared goal. Asking to stop Settings on payer rate instead of revenue returns `METRIC_NOT_GOAL`.
 - **A real winner ships on time.** Onboarding's goal is 60-day revenue, so week 2 is "not yet" and week 9 is the first valid look. It crosses there (z 4.34 vs 2.71), so it ships at week 9 instead of running on: about $19k on a synthetic dataset.
 
-Run `npm run demo:story` to reproduce every number above. All of them come from the synthetic export (`export_csv`), not from real revenue.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/img/peeking-dark.svg">
+  <img alt="Settings test, weekly looks: on 16 Aug z reaches 2.00, past the naive 1.96 line (p 0.045) but under Fulcrum's boundary of 3.32; by the last look main_lifetime leads." src="docs/img/peeking-light.svg">
+</picture>
+
+Run `npm run demo:story` to reproduce every number above (`npm run readme:chart` redraws this chart from the same data). All of them come from the synthetic export (`export_csv`), not from real revenue.
 
 **Why AI:** the statistics are deterministic code on purpose, since a stopping rule a model could talk itself past would be worthless. The agent does the growth work (reads the data, finds the next hypothesis, proposes a test, explains verdicts), and every "no" or "not yet" it gets back carries the numbers and the next step.
 

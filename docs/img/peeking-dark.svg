@@ -1,0 +1,54 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 400" width="760" height="400" role="img" aria-labelledby="t d">
+<title id="t">Settings test: a weekly peeker ships on 16 Aug, Fulcrum's boundary blocks</title>
+<desc id="d">z per weekly look on the declared goal (30-day revenue per install). On 16 Aug z is 2.00, past the naive 1.96 line (p 0.045) but under the boundary of 3.32. Later the other arm leads.</desc>
+<rect width="760" height="400" rx="8" fill="#1a1a19"/>
+<g font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<text x="48" y="26" font-size="15" font-weight="600" fill="#f0efec">Settings test, weekly looks on the declared goal (30-day revenue per install)</text>
+<line x1="48" y1="44" x2="66" y2="44" stroke="#3987e5" stroke-width="2"/>
+<text x="72" y="48" font-size="12" fill="#c3c2b7">z (settings vs main_lifetime)</text>
+<line x1="268" y1="44" x2="286" y2="44" stroke="#d95926" stroke-width="2"/>
+<text x="292" y="48" font-size="12" fill="#c3c2b7">Fulcrum boundary</text>
+<line x1="410" y1="44" x2="428" y2="44" stroke="#c3c2b7" stroke-width="2" stroke-dasharray="4 4"/>
+<text x="434" y="48" font-size="12" fill="#c3c2b7">naive p &lt; 0.05 (|z| 1.96)</text>
+<line x1="48" y1="356.0" x2="610" y2="356.0" stroke="#3a3a37" stroke-width="1"/>
+<text x="40" y="360.0" font-size="11" text-anchor="end" fill="#c3c2b7">-4</text>
+<line x1="48" y1="283.0" x2="610" y2="283.0" stroke="#3a3a37" stroke-width="1"/>
+<text x="40" y="287.0" font-size="11" text-anchor="end" fill="#c3c2b7">-2</text>
+<line x1="48" y1="210.0" x2="610" y2="210.0" stroke="#3a3a37" stroke-width="1"/>
+<text x="40" y="214.0" font-size="11" text-anchor="end" fill="#c3c2b7">0</text>
+<line x1="48" y1="137.0" x2="610" y2="137.0" stroke="#3a3a37" stroke-width="1"/>
+<text x="40" y="141.0" font-size="11" text-anchor="end" fill="#c3c2b7">2</text>
+<line x1="48" y1="64.0" x2="610" y2="64.0" stroke="#3a3a37" stroke-width="1"/>
+<text x="40" y="68.0" font-size="11" text-anchor="end" fill="#c3c2b7">4</text>
+<text x="48.0" y="374" font-size="11" text-anchor="middle" fill="#c3c2b7">9 Aug</text>
+<text x="104.2" y="374" font-size="11" text-anchor="middle" fill="#c3c2b7">16 Aug</text>
+<text x="160.4" y="374" font-size="11" text-anchor="middle" fill="#c3c2b7">23 Aug</text>
+<text x="272.8" y="374" font-size="11" text-anchor="middle" fill="#c3c2b7">6 Sep</text>
+<text x="385.2" y="374" font-size="11" text-anchor="middle" fill="#c3c2b7">20 Sep</text>
+<text x="497.6" y="374" font-size="11" text-anchor="middle" fill="#c3c2b7">4 Oct</text>
+<text x="610.0" y="374" font-size="11" text-anchor="middle" fill="#c3c2b7">18 Oct</text>
+<text x="610" y="392" font-size="11" text-anchor="end" fill="#c3c2b7">look ending (2026)</text>
+<line x1="48" y1="138.5" x2="610" y2="138.5" stroke="#c3c2b7" stroke-width="1.5" stroke-dasharray="4 4"/>
+<path d="M48.0,77.2 L104.2,88.8 L160.4,97.8 L216.6,105.0 L272.8,111.0 L329.0,116.1 L385.2,120.5 L441.4,124.3 L497.6,127.7 L553.8,130.7 L610.0,133.3" fill="none" stroke="#d95926" stroke-width="2"/>
+<line x1="48" y1="281.5" x2="610" y2="281.5" stroke="#c3c2b7" stroke-width="1.5" stroke-dasharray="4 4"/>
+<path d="M48.0,342.8 L104.2,331.2 L160.4,322.2 L216.6,315.0 L272.8,309.0 L329.0,303.9 L385.2,299.5 L441.4,295.7 L497.6,292.3 L553.8,289.3 L610.0,286.6" fill="none" stroke="#d95926" stroke-width="2"/>
+<path d="M48.0,183.8 L104.2,136.8 L160.4,153.4 L216.6,182.3 L272.8,190.8 L329.0,221.0 L385.2,216.1 L441.4,232.0 L497.6,248.0 L553.8,242.8 L610.0,239.9" fill="none" stroke="#3987e5" stroke-width="2" stroke-linejoin="round"/>
+<circle cx="48.0" cy="183.8" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="104.2" cy="136.8" r="5" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="160.4" cy="153.4" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="216.6" cy="182.3" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="272.8" cy="190.8" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="329.0" cy="221.0" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="385.2" cy="216.1" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="441.4" cy="232.0" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="497.6" cy="248.0" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="553.8" cy="242.8" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<circle cx="610.0" cy="239.9" r="3" fill="#3987e5" stroke="#1a1a19" stroke-width="2"/>
+<text x="618" y="137.3" font-size="12" fill="#f0efec">boundary 2.10</text>
+<text x="618" y="142.5" dy="12" font-size="12" fill="#c3c2b7">naive 1.96</text>
+<text x="618" y="243.9" font-size="12" fill="#f0efec">main_lifetime</text>
+<text x="618" y="243.9" dy="14" font-size="12" fill="#c3c2b7">leads at the end</text>
+<line x1="104.2" y1="128.8" x2="138.2" y2="84.8" stroke="#c3c2b7" stroke-width="1"/>
+<text x="142.2" y="72.8" font-size="12" font-weight="600" fill="#f0efec">16 Aug: naive p 0.045, a peeker ships</text>
+<text x="142.2" y="88.8" font-size="12" fill="#c3c2b7">z 2.00 &lt; boundary 3.32: Fulcrum blocks</text>
+</g></svg>

@@ -13,7 +13,8 @@
     "start": "tsx src/mcp/server.ts",
     "test:attacks": "vitest run -t \"AC-BYPASS|AC-TOKEN|AC-SHOP|AC-10|ATTACK\"",
     "demo:backup": "tsx scripts/demo-backup.ts",
-    "demo:story": "tsx scripts/demo-story.ts"
+    "demo:story": "tsx scripts/demo-story.ts",
+    "readme:chart": "tsx scripts/readme-chart.ts"
   },
   "dependencies": {
     "@hono/node-server": "^2.1.6",
