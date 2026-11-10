@@ -1,0 +1,32 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # The synthetic Lumen dataset is read in place from ~/Projects/adapty-seed-data-hack, never copied
+      # into this repo. Pinned to a commit so the verdict numbers the tests check can't drift.
+      - name: Fetch the synthetic dataset
+        run: |
+          git clone --quiet https://github.com/kpotehin/adapty-seed-data-hack.git "$HOME/Projects/adapty-seed-data-hack"
+          git -C "$HOME/Projects/adapty-seed-data-hack" checkout --quiet 77d39ed807a66bbebcf24fe67c42be4fc9ef4c82
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run test:attacks
