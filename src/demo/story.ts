@@ -53,13 +53,14 @@ function findPlan(plans: TestPlan[], prefix: string): TestPlan {
   return p;
 }
 
-export function buildStory(data: Dataset, plans: TestPlan[]): Story {
+/** `fallbackK` is the policy's (see fallbackKOf), so the story uses the same K as the server for a plan without K. */
+export function buildStory(data: Dataset, plans: TestPlan[], opts: { fallbackK?: number } = {}): Story {
   // 1. Settings: every weekly look on the declared goal.
   const sPlan = findPlan(plans, "Settings");
   const sPd = planData(sPlan, data);
-  const tl = testTimeline(sPlan, data, {});
+  const tl = testTimeline(sPlan, data, opts);
   const armN = (asOf: Date): [number, number] => {
-    const v = judgeTest(sPlan, data, { asOf });
+    const v = judgeTest(sPlan, data, { ...opts, asOf });
     return [v.arms[0]?.n ?? 0, v.arms[1]?.n ?? 0];
   };
   const looks: StoryLook[] = tl.looks.map((l) => {
@@ -71,7 +72,7 @@ export function buildStory(data: Dataset, plans: TestPlan[]): Story {
   const markedRaw = tl.looks.find((l) => l.k === marked.k);
   const last = tl.looks[tl.looks.length - 1];
   if (!last) throw new Error("Settings timeline has no looks");
-  const lastVerdict = judgeTest(sPlan, data, { asOf: lookEnd(sPd, last.k) });
+  const lastVerdict = judgeTest(sPlan, data, { ...opts, asOf: lookEnd(sPd, last.k) });
 
   // 2. The simulation: K looks, same seeded A/A draws for both rules.
   const K = tl.K;

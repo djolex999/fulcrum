@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import type { AbTestSummary } from "../../src/adapty/types.js";
-import { checkCreate, DEFAULT_POLICY_PATH, loadPolicy, type Policy } from "../../src/policy/policy.js";
+import { checkCreate, DEFAULT_POLICY_PATH, fallbackKOf, loadPolicy, type Policy } from "../../src/policy/policy.js";
 
 const GOOD = { approvers: ["Djordje"], allowedPlacements: ["ai_limit_reached"], maxChallengerWeight: 50, fallbackK: 15, fallbackHorizonDays: null, dailyWriteLimit: 5 };
 let dir: string;
@@ -27,6 +27,18 @@ describe("AC-POLICY", () => {
     const s = loadPolicy(join(dir, "nope.json"));
     expect(s.ok).toBe(false);
     expect(s.ok ? "" : s.reason).toContain("not found");
+  });
+
+  it("AC-POLICY fallbackK accepts the edges 1 and 52", () => {
+    for (const k of [1, 52]) {
+      const s = loadPolicy(write({ ...GOOD, fallbackK: k }));
+      expect(s.ok ? s.policy.fallbackK : null).toBe(k);
+    }
+  });
+
+  it("AC-9 fallbackKOf: a valid policy gives its fallbackK, an invalid one gives nothing (built-in K = 15)", () => {
+    expect(fallbackKOf(loadPolicy(write({ ...GOOD, fallbackK: 10 })))).toEqual({ fallbackK: 10 });
+    expect(fallbackKOf(loadPolicy(write("{oops")))).toEqual({});
   });
 
   it.each([

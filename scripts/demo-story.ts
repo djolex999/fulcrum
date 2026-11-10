@@ -3,6 +3,7 @@
 import { loadDataset } from "../src/data/csv.js";
 import { buildStory } from "../src/demo/story.js";
 import type { Story, StoryLook } from "../src/demo/story.js";
+import { fallbackKOf, loadPolicy } from "../src/policy/policy.js";
 import { loadPlans } from "../src/stats/plans.js";
 
 const pct = (x: number): string => `${(x * 100).toFixed(1)}%`;
@@ -56,5 +57,5 @@ function render(s: Story): string {
 }
 
 const data = await loadDataset();
-const story = buildStory(data, loadPlans(undefined, data));
+const story = buildStory(data, loadPlans(undefined, data), fallbackKOf(loadPolicy()));
 console.log(process.argv.includes("--json") ? JSON.stringify(story, null, 2) : render(story));

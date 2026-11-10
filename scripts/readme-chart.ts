@@ -6,6 +6,7 @@ import { fileURLToPath } from "node:url";
 import { loadDataset } from "../src/data/csv.js";
 import { buildStory } from "../src/demo/story.js";
 import type { StoryLook } from "../src/demo/story.js";
+import { fallbackKOf, loadPolicy } from "../src/policy/policy.js";
 import { loadPlans } from "../src/stats/plans.js";
 
 interface Theme {
@@ -110,7 +111,7 @@ function render(looks: StoryLook[], marked: StoryLook, t: Theme): string {
   return out.join("\n") + "\n";
 }
 
-const story = buildStory(await loadDataset(), loadPlans());
+const story = buildStory(await loadDataset(), loadPlans(), fallbackKOf(loadPolicy()));
 const looks = story.settings.looks.filter((l) => l.z !== null);
 const dir = fileURLToPath(new URL("../docs/img/", import.meta.url));
 mkdirSync(dir, { recursive: true });

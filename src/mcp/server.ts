@@ -7,7 +7,7 @@ import { loadConfig } from "../config.js";
 import { createLedger } from "../gate/ledger.js";
 import { createGate } from "../gate/pending.js";
 import { createProposals, type Proposals } from "../gate/proposals.js";
-import { loadPolicy } from "../policy/policy.js";
+import { fallbackKOf, loadPolicy } from "../policy/policy.js";
 import { startApprovalPage } from "../ui/approve.js";
 import type { StopLabels } from "../ui/labels.js";
 import { createLogger } from "./log.js";
@@ -33,14 +33,14 @@ export async function main(opts: { startApprovalPage?: (gate: Gate, port: number
   // A missing or invalid fulcrum.policy.json does not stop Fulcrum: it blocks every proposal (fail closed),
   // and verdicts fall back to the built-in K = 15.
   const policy = loadPolicy();
-  if (!policy.ok) log(`policy invalid, proposals blocked: ${policy.reason}`);
+  if (!policy.ok) log(`policy invalid, proposals blocked and verdicts use the built-in K = 15: ${policy.reason}`);
   // One engine, one judge: the gate and the tools share it so they cannot disagree.
   const plans = loadPlans();
   const { judge, timeline } = createEngine({
     cli,
     plans,
     loadData: () => loadDataset(config.dataDir),
-    ...(policy.ok ? { fallbackK: policy.policy.fallbackK } : {}),
+    ...fallbackKOf(policy),
   });
   const gate = createGate({ cli, ledger, judge });
   const signals = async (): Promise<Record<string, unknown>> => ({ ...aiEditSignal(await loadDataset(config.dataDir)) });
