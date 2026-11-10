@@ -47,7 +47,8 @@ export function loadPolicy(path: string = DEFAULT_POLICY_PATH): PolicyState {
   if (!isNames(r.approvers)) return { ok: false, reason: "approvers must be a non-empty list of names" };
   if (!isNames(r.allowedPlacements)) return { ok: false, reason: "allowedPlacements must be a non-empty list of placement developer ids" };
   if (!isInt(r.maxChallengerWeight, 1, 99)) return { ok: false, reason: "maxChallengerWeight must be an integer from 1 to 99" };
-  if (!isInt(r.fallbackK, 1)) return { ok: false, reason: "fallbackK must be a positive integer" };
+  // Capped at a year of weekly looks: a K outside the calibration table is calibrated by simulation, and a huge K would stall it.
+  if (!isInt(r.fallbackK, 1, 52)) return { ok: false, reason: "fallbackK must be an integer from 1 to 52" };
   if (r.fallbackHorizonDays !== null && !isInt(r.fallbackHorizonDays, 1)) return { ok: false, reason: "fallbackHorizonDays must be null or a positive integer" };
   if (!isInt(r.dailyWriteLimit, 0)) return { ok: false, reason: "dailyWriteLimit must be a non-negative integer" };
   return {

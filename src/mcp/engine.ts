@@ -68,7 +68,10 @@ export function createEngine(deps: {
   cli: Pick<AdaptyCli, "getTest">;
   plans: readonly TestPlan[];
   loadData: () => Promise<Dataset>;
+  /** K for tests whose plan gives none (the policy's fallbackK). Omitted: the built-in K = 15. */
+  fallbackK?: number;
 }): { judge: JudgeFn; timeline: TimelineFn } {
+  const fallback = deps.fallbackK === undefined ? {} : { fallbackK: deps.fallbackK };
   // The CSV is loaded lazily and once (50,000 users). We cache the promise, not the result, so
   // concurrent callers share one load; a failed load is forgotten so it can be retried.
   let data: Promise<Dataset> | undefined;
@@ -98,6 +101,7 @@ export function createEngine(deps: {
     const metric = parseMetric(opts.metric);
     const { test, plan } = await resolve(testId);
     const v = judgeTest(plan, await getData(), {
+      ...fallback,
       ...(opts.asOf ? { asOf: opts.asOf } : {}),
       ...(metric ? { metric } : {}),
     });
@@ -126,7 +130,7 @@ export function createEngine(deps: {
   const timeline: TimelineFn = async (testId, opts) => {
     const metric = parseMetric(opts.metric);
     const { plan } = await resolve(testId);
-    const t = testTimeline(plan, await getData(), metric ? { metric } : {});
+    const t = testTimeline(plan, await getData(), metric ? { ...fallback, metric } : fallback);
     return {
       goal_metric: t.goalMetric,
       metric: t.metric,

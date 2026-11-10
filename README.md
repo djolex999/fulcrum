@@ -6,7 +6,7 @@ Fulcrum is the only door between an AI agent and an Adapty account: the agent ca
 
 - **Demo video (2 min):** [youtu.be/kvZbSLL6XP4](https://youtu.be/kvZbSLL6XP4)
 - **Landing page:** [djolex999.github.io/fulcrum-site](https://djolex999.github.io/fulcrum-site/) ([source](https://github.com/djolex999/fulcrum-site))
-- **Built and tested:** 194 tests (`npm test`), plus a bypass and abuse suite (`npm run test:attacks`).
+- **Built and tested:** 196 tests (`npm test`), plus a bypass and abuse suite (`npm run test:attacks`).
 
 ## What it does
 
@@ -84,7 +84,7 @@ To run the agent against a real Adapty account: put `ADAPTY_TOKEN` in `.env` (se
 - **Gate state is in memory.** Restarting Fulcrum drops pending requests; the ledger on disk is kept. *In production:* pending actions in a database next to the ledger.
 - **One approver, identified by a typed name.** Proposed tests require a name listed in `approvers`; stop approvals record the typed name but don't check the list. The page is local and protected by a one-time login, not by user accounts. *In production:* real sign-in, per-action approver lists, approvals in Slack.
 - **Isolation depends on the agent's client config.** The demo agent's MCP config, deny rules, sandbox and a guard hook keep it away from Adapty, and it runs as the same OS user as Fulcrum. *In production:* Fulcrum runs as a separate service under its own user, so the agent's machine never holds the token.
-- **Policy's `fallbackK` is not read yet.** Tests without K in their plan use a built-in K = 15, reported as `K_source: "fallback"`.
+- **Policy's `fallbackHorizonDays` is not read yet.** Every test plan must declare its horizon.
 
 ## Disclosure
 

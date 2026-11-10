@@ -176,9 +176,10 @@ function armCounts(plan: TestPlan, pd: PlanData, data: Dataset, metric: Metric, 
   ];
 }
 
-// K = number of planned weekly looks. If the plan has none we use a fallback and say so openly.
-function kInfo(plan: TestPlan): { K: number; KSource: "test_plan" | "fallback" } {
-  return plan.K === undefined ? { K: FALLBACK_K, KSource: "fallback" } : { K: plan.K, KSource: "test_plan" };
+// K = number of planned weekly looks. If the plan has none we use the fallback (the policy's fallbackK,
+// else the built-in FALLBACK_K) and say so openly.
+function kInfo(plan: TestPlan, fallbackK: number = FALLBACK_K): { K: number; KSource: "test_plan" | "fallback" } {
+  return plan.K === undefined ? { K: fallbackK, KSource: "fallback" } : { K: plan.K, KSource: "test_plan" };
 }
 
 const fmt = (x: number): string => x.toFixed(2);
@@ -199,10 +200,10 @@ function firstValidLook(plan: TestPlan, pd: PlanData, data: Dataset, metric: Met
 //    remain, NO_WINNER at the last look.
 // Example, Onboarding (60-day goal): week 2 -> not yet, week 9 -> winner.
 // Replay (asOf) uses the same code with an earlier cutoff, so past and present can't disagree.
-export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; metric?: Metric }): Verdict {
+export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; metric?: Metric; fallbackK?: number }): Verdict {
   const pd = planData(plan, data);
   const goal = goalMetricOf(plan);
-  const { K, KSource } = kInfo(plan);
+  const { K, KSource } = kInfo(plan, opts.fallbackK);
   const base = {
     goalMetric: goal,
     goalSource: "test_plan" as const,
@@ -317,7 +318,7 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
     for (const us of pd.users) for (const u of us) if (u.installAt.getTime() > lastEnd) after++;
     reasons.push(`The data runs past the last planned look: ${after} installs fall after look ${K} (ends ${isoDate(cutoff)}) and are not in this verdict.`);
   }
-  if (KSource === "fallback") reasons.push(`The test plan gives no K; using the fallback K = ${FALLBACK_K}.`);
+  if (KSource === "fallback") reasons.push(`The test plan gives no K; using the fallback K = ${K}.`);
 
   return {
     ...base,
@@ -341,12 +342,12 @@ export function judgeTest(plan: TestPlan, data: Dataset, opts: { asOf?: Date; me
 // - looks[] stops at look K (the last PLANNED look), the same view judgeTest gives.
 // - end is computed on ALL data up to dataEnd, including installs after look K.
 // Example, Settings: about -$0.91 / p 0.41 at look 15, about -$0.68 / p 0.50 at the end of the data.
-export function testTimeline(plan: TestPlan, data: Dataset, opts: { metric?: Metric }): Timeline {
+export function testTimeline(plan: TestPlan, data: Dataset, opts: { metric?: Metric; fallbackK?: number }): Timeline {
   const pd = planData(plan, data);
   const goal = goalMetricOf(plan);
   const metric = opts.metric ?? goal;
   const isGoal = metric === goal;
-  const { K, KSource } = kInfo(plan);
+  const { K, KSource } = kInfo(plan, opts.fallbackK);
   const c = cFor(K);
   // Show only whole weeks, and never more than K.
   const lastFull = Math.min(K, Math.floor((data.dataEnd.getTime() - pd.firstInstall) / WEEK_MS));
