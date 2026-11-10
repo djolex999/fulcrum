@@ -30,14 +30,20 @@ export async function main(opts: { startApprovalPage?: (gate: Gate, port: number
   const { log, scrub } = createLogger(config.token);
   const cli = createAdaptyCli({ appId: config.appId, token: config.token });
   const ledger = createLedger(config.ledgerPath);
-  // One engine, one judge: the gate and the tools share it so they cannot disagree.
-  const plans = loadPlans();
-  const { judge, timeline } = createEngine({ cli, plans, loadData: () => loadDataset(config.dataDir) });
-  const gate = createGate({ cli, ledger, judge });
-  const signals = async (): Promise<Record<string, unknown>> => ({ ...aiEditSignal(await loadDataset(config.dataDir)) });
-  // A missing or invalid fulcrum.policy.json does not stop Fulcrum: it blocks every proposal (fail closed).
+  // A missing or invalid fulcrum.policy.json does not stop Fulcrum: it blocks every proposal (fail closed),
+  // and verdicts fall back to the built-in K = 15.
   const policy = loadPolicy();
   if (!policy.ok) log(`policy invalid, proposals blocked: ${policy.reason}`);
+  // One engine, one judge: the gate and the tools share it so they cannot disagree.
+  const plans = loadPlans();
+  const { judge, timeline } = createEngine({
+    cli,
+    plans,
+    loadData: () => loadDataset(config.dataDir),
+    ...(policy.ok ? { fallbackK: policy.policy.fallbackK } : {}),
+  });
+  const gate = createGate({ cli, ledger, judge });
+  const signals = async (): Promise<Record<string, unknown>> => ({ ...aiEditSignal(await loadDataset(config.dataDir)) });
   const proposals = createProposals({ cli, ledger, policy });
   const labels: StopLabels = new Map();
   const server = buildServer({ cli, gate, proposals, labels, judge, timeline, signals, plans, approvalUrl: `http://127.0.0.1:${config.port}/`, log, scrub });

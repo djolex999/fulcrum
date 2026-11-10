@@ -164,6 +164,17 @@ describe.skipIf(!real)("verdicts on real data", () => {
     expect(testTimeline(settings, d, {}).KSource).toBe("fallback");
   });
 
+  it("AC-9 the policy's fallbackK is used when the plan gives no K", async () => {
+    const d = await loadDataset();
+    const v = judgeTest(settings, d, { fallbackK: 10 });
+    expect(v.KSource).toBe("fallback");
+    expect(v.K).toBe(10);
+    expect(v.reasons.join(" ")).toContain("fallback K = 10");
+    expect(testTimeline(settings, d, { fallbackK: 10 }).K).toBe(10);
+    // A K in the plan wins over the policy's fallback.
+    expect(judgeTest(onb, d, { fallbackK: 10 }).K).toBe(onb.K);
+  });
+
   it("AC-9 K from the plan changes the boundary", async () => {
     const d = await loadDataset();
     const asOf = lookDate(d, onb, 9);

@@ -38,6 +38,7 @@ describe("AC-POLICY", () => {
     ["weight 100", { ...GOOD, maxChallengerWeight: 100 }],
     ["weight as text", { ...GOOD, maxChallengerWeight: "50" }],
     ["bad K", { ...GOOD, fallbackK: 0 }],
+    ["K too large", { ...GOOD, fallbackK: 53 }],
     ["bad horizon", { ...GOOD, fallbackHorizonDays: -3 }],
     ["bad limit", { ...GOOD, dailyWriteLimit: 1.5 }],
     ["missing field", { approvers: ["Djordje"] }],
